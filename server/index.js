@@ -74,6 +74,11 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("message_deleted", { messageId });
   });
 
+  socket.on("exchange_keys", (data) => {
+    const { roomId, publicKey } = data;
+    socket.to(roomId).emit("exchange_keys", { publicKey });
+  });
+
   socket.on("typing", (data) => {
     const { roomId, isTyping } = data;
     socket.to(roomId).emit("typing", { isTyping });

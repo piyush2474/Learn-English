@@ -3,7 +3,14 @@ import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Vo
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
-import { encryptMessage, decryptMessage } from '../utils/crypto';
+import { 
+  encryptWithKey, 
+  decryptWithKey, 
+  generateKeyPair, 
+  exportPublicKey, 
+  importPublicKey, 
+  deriveSharedSecret 
+} from '../utils/crypto';
 
 const Home = () => {
   const [status, setStatus] = useState('Disconnected');
@@ -12,6 +19,8 @@ const Home = () => {
   const [roomId, setRoomId] = useState(null);
   const [userCount, setUserCount] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [myKeyPair, setMyKeyPair] = useState(null);
+  const [sharedKey, setSharedKey] = useState(null);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
 
@@ -101,16 +110,42 @@ const Home = () => {
       sessionStorage.removeItem('current_room_id');
     });
 
-    socket.on('matched', (data) => {
-      setStatus('Matched');
+    socket.on('room_joined', async (data) => {
       setRoomId(data.roomId);
-      setMessages([]);
+      setStatus('Matched');
       sessionStorage.setItem('current_room_id', data.roomId);
+      
+      // Send our public key to the partner
+      if (myKeyPair) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPair.publicKey);
+        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
+      }
+    });
+
+    socket.on('exchange_keys', async (data) => {
+      if (myKeyPair && !sharedKey) {
+        const partnerPubKey = await importPublicKey(data.publicKey);
+        const derived = await deriveSharedSecret(myKeyPair.privateKey, partnerPubKey);
+        setSharedKey(derived);
+      }
     });
 
     socket.on('receive_message', async (data) => {
-      const decryptedMessage = await decryptMessage(data.message, data.roomId);
-      setMessages((prev) => [...prev, { ...data, message: decryptedMessage }]);
+      let content = data.message;
+      if (sharedKey) {
+        content = await decryptWithKey(data.message, sharedKey);
+      }
+      
+      // If it's an image, convert to Blob URL for privacy
+      if (data.type === 'image' && content.startsWith('data:')) {
+        try {
+          const res = await fetch(content);
+          const blob = await res.blob();
+          content = URL.createObjectURL(blob);
+        } catch (e) { console.error("Blob conversion failed", e); }
+      }
+
+      setMessages((prev) => [...prev, { ...data, message: content }]);
       setIsPartnerTyping(false);
     });
 
@@ -130,6 +165,7 @@ const Home = () => {
         { message: 'Stranger has disconnected. Finding someone new...', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
       setRoomId(null);
+      setSharedKey(null); // Reset encryption
       sessionStorage.removeItem('current_room_id');
       endCall();
 
@@ -200,6 +236,12 @@ const Home = () => {
 
   // Update volume when speaker mode changes
   useEffect(() => {
+    const initKeys = async () => {
+      const keys = await generateKeyPair();
+      setMyKeyPair(keys);
+    };
+    initKeys();
+
     if (remoteAudioRef.current) {
       remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
     }
@@ -405,7 +447,11 @@ const Home = () => {
     if (!inputText.trim() || !roomId) return;
 
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const encryptedText = await encryptMessage(inputText, roomId);
+    let encryptedText = inputText;
+    
+    if (sharedKey) {
+      encryptedText = await encryptWithKey(inputText, sharedKey);
+    }
     
     const messageData = {
       message: encryptedText,
@@ -435,10 +481,14 @@ const Home = () => {
     reader.onload = async () => {
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const base64Image = reader.result;
-      const encryptedImage = await encryptMessage(base64Image, roomId);
+      
+      let finalMessage = base64Image;
+      if (sharedKey) {
+        finalMessage = await encryptWithKey(base64Image, sharedKey);
+      }
 
       const messageData = {
-        message: encryptedImage,
+        message: finalMessage,
         roomId,
         senderId: socket.id,
         type: 'image',
@@ -447,7 +497,16 @@ const Home = () => {
       };
 
       socket.emit('send_message', messageData);
-      setMessages((prev) => [...prev, { ...messageData, message: base64Image }]);
+      
+      // Convert to Blob for local display privacy too
+      let localDisplay = base64Image;
+      try {
+        const res = await fetch(base64Image);
+        const blob = await res.blob();
+        localDisplay = URL.createObjectURL(blob);
+      } catch (e) {}
+
+      setMessages((prev) => [...prev, { ...messageData, message: localDisplay }]);
     };
     reader.readAsDataURL(file);
     // Reset input
