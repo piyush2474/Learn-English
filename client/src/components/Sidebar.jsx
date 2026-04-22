@@ -86,11 +86,15 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
           </div>
         )}
 
-        <div className="px-3 py-2 flex items-center gap-2 mt-4">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[13px] text-gray-400">
-            <span className="text-gray-100 font-bold">{Math.max(0, userCount - 1)}</span> other users online
-          </span>
+        <div className="px-3 py-4 bg-white/5 rounded-2xl mx-3 my-4 flex flex-col items-center gap-2 border border-white/5">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
+            <div className="w-2 h-2 rounded-full bg-green-500 absolute" />
+            <span className="text-[14px] font-bold text-white tracking-tight">
+              {Math.max(0, userCount)} Nodes Live
+            </span>
+          </div>
+          <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Global Network</p>
         </div>
       </div>
 

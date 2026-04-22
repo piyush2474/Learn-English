@@ -814,11 +814,15 @@ const Home = () => {
             </button>
             <div className="flex items-center gap-2">
               <span className="font-bold text-white">Learn English</span>
-              {status === 'Matched' && (
-                <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                   Live
+              {status === 'Matched' ? (
+                <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
                 </span>
-              )}
+              ) : status === 'Waiting' ? (
+                <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                   Finding...
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -871,31 +875,51 @@ const Home = () => {
           {status === 'Idle' ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-700">
               <div className="max-w-md space-y-4">
-                <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 transform hover:rotate-12 transition-transform duration-500">
                   <Globe className="w-10 h-10 text-blue-500" />
                 </div>
-                <h1 className="text-4xl font-bold text-white tracking-tight">Ready to Practice?</h1>
-                <p className="text-gray-400 text-lg">Connect with a random English learner and improve your speaking skills anonymously.</p>
+                <h1 className="text-5xl font-extrabold text-white tracking-tight">Practice English <br/><span className="text-blue-500 text-3xl font-bold">Anonymously</span></h1>
+                <p className="text-gray-400 text-lg font-medium">Connect instantly with learners around the world. No registration required to chat.</p>
               </div>
 
               <button 
                 onClick={findNewPartner}
-                className="group relative flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-10 py-5 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-500/20"
+                className="group relative flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-blue-500/20"
               >
-                <span>Learn English</span>
-                <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                  <Plus className="w-5 h-5 text-white" />
+                </div>
+                <span>Learn English Now</span>
               </button>
 
               <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  <span>{userCount} Online</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span>{userCount} Learners Online</span>
                 </div>
                 <span>•</span>
-                <span>Encrypted</span>
+                <span>Secure</span>
                 <span>•</span>
-                <span>Anonymous</span>
+                <span>Global</span>
               </div>
+            </div>
+          ) : status === 'Waiting' ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 animate-in zoom-in duration-500">
+              <div className="relative">
+                <div className="w-32 h-32 border-4 border-blue-500/20 rounded-full" />
+                <div className="absolute inset-0 w-32 h-32 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <Globe className="absolute inset-0 m-auto w-12 h-12 text-blue-500 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-white">Finding a Partner...</h2>
+                <p className="text-gray-400 font-medium">Matching you with someone based on availability.</p>
+              </div>
+              <button 
+                onClick={endSession}
+                className="text-gray-500 hover:text-white text-sm font-medium underline underline-offset-4 transition-colors"
+              >
+                Cancel Search
+              </button>
             </div>
           ) : (
             <ChatBox 
