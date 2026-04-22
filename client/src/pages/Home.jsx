@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -13,6 +13,16 @@ const Home = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
+
+  // --- Calling States ---
+  const [isCalling, setIsCalling] = useState(false);
+  const [isReceivingCall, setIsReceivingCall] = useState(false);
+  const [callAccepted, setCallAccepted] = useState(false);
+  const [incomingSignal, setIncomingSignal] = useState(null);
+  const peerConnection = useRef(null);
+  const localStream = useRef(null);
+  const remoteAudioRef = useRef(null);
+  // ----------------------
 
   // Persistent User ID
   const userId = useRef(localStorage.getItem('chat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`);
@@ -87,7 +97,26 @@ const Home = () => {
       ]);
       setRoomId(null);
       sessionStorage.removeItem('current_room_id');
+      endCall();
     });
+
+    // --- WebRTC Listeners ---
+    socket.on('incoming_call', (data) => {
+      setIsReceivingCall(true);
+      setIncomingSignal(data.signal);
+    });
+
+    socket.on('call_accepted', async (signal) => {
+      if (peerConnection.current) {
+        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+        setCallAccepted(true);
+      }
+    });
+
+    socket.on('call_ended', () => {
+      endCall();
+    });
+    // ----------------------
 
     return () => {
       socket.off('connect');
@@ -100,11 +129,96 @@ const Home = () => {
       socket.off('rejoined');
       socket.off('partner_rejoined');
       socket.off('rejoin_failed');
+      socket.off('incoming_call');
+      socket.off('call_accepted');
+      socket.off('call_ended');
       socket.disconnect();
     };
   }, []);
 
+  const createPeerConnection = (roomId) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        // In a more complex app, we'd send individual candidates, 
+        // but for a simple 1-to-1 we can wait for the full SDP or just use trickling if we handle it.
+        // For simplicity with Socket.IO, let's just use the final offer/answer.
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+      }
+    };
+
+    if (localStream.current) {
+      localStream.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStream.current);
+      });
+    }
+
+    peerConnection.current = pc;
+    return pc;
+  };
+
+  const startCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStream.current = stream;
+      setIsCalling(true);
+
+      const pc = createPeerConnection(roomId);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit('call_user', { roomId, signalData: offer });
+    } catch (err) {
+      console.error("Failed to start call:", err);
+      alert("Could not access microphone.");
+    }
+  };
+
+  const answerCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStream.current = stream;
+      setIsReceivingCall(false);
+      setCallAccepted(true);
+
+      const pc = createPeerConnection(roomId);
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
+      
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit('answer_call', { roomId, signalData: answer });
+    } catch (err) {
+      console.error("Failed to answer call:", err);
+    }
+  };
+
+  const endCall = () => {
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+    if (localStream.current) {
+      localStream.current.getTracks().forEach(track => track.stop());
+      localStream.current = null;
+    }
+    setIsCalling(false);
+    setIsReceivingCall(false);
+    setCallAccepted(false);
+    setIncomingSignal(null);
+    socket.emit('end_call', { roomId });
+  };
+
   const findNewPartner = () => {
+    endCall();
     socket.emit('leave_chat');
     socket.emit('find_partner', { userId: userId.current });
     setMessages([]);
@@ -143,6 +257,54 @@ const Home = () => {
 
   return (
     <div className="h-screen bg-[#212121] flex overflow-hidden font-sans">
+      {/* Hidden Audio for remote stream */}
+      <audio ref={remoteAudioRef} autoPlay />
+
+      {/* Incoming Call Modal */}
+      {isReceivingCall && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#2f2f2f] p-8 rounded-3xl border border-white/10 text-center max-w-sm w-full shadow-2xl">
+            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <Phone className="w-10 h-10 text-green-500" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Incoming Voice Call</h3>
+            <p className="text-gray-400 mb-8 text-sm">Practice your English speaking skills!</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={endCall}
+                className="flex-1 py-3 px-6 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
+              >
+                Decline
+              </button>
+              <button 
+                onClick={answerCall}
+                className="flex-1 py-3 px-6 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold transition-colors"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-Call Status Bar */}
+      {(isCalling || callAccepted) && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[80] bg-[#2f2f2f] border border-green-500/30 px-6 py-2 rounded-full shadow-2xl flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-white">
+              {callAccepted ? "On Call" : "Calling..."}
+            </span>
+          </div>
+          <button 
+            onClick={endCall}
+            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
+          >
+            <PhoneOff className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* ChatGPT Sidebar */}
       <Sidebar 
         status={status} 
@@ -154,22 +316,40 @@ const Home = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative min-w-0">
-        {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 border-b border-[#2f2f2f] bg-[#212121]">
+        {/* Header (Shared for Mobile and Desktop) */}
+        <header className="flex items-center justify-between p-4 border-b border-[#2f2f2f] bg-[#212121]">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-1 hover:bg-white/5 rounded-lg"
+              className="md:hidden p-1 hover:bg-white/5 rounded-lg"
             >
               <Menu className="w-6 h-6 text-gray-400" />
             </button>
             <div className="flex items-center gap-2">
               <span className="font-bold text-white">Learn English</span>
+              {status === 'Matched' && (
+                <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  Live
+                </span>
+              )}
             </div>
           </div>
-          <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg">
-            <Plus className="w-5 h-5 text-gray-400" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {status === 'Matched' && !isCalling && !callAccepted && (
+              <button 
+                onClick={startCall}
+                title="Start Audio Call"
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Call</span>
+              </button>
+            )}
+            <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
+              <Plus className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
         </header>
 
         {/* Chat Interface */}

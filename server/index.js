@@ -77,6 +77,23 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("typing", { isTyping });
   });
 
+  // --- WebRTC Signaling for Calls ---
+  socket.on("call_user", (data) => {
+    const { roomId, signalData } = data;
+    socket.to(roomId).emit("incoming_call", { signal: signalData });
+  });
+
+  socket.on("answer_call", (data) => {
+    const { roomId, signalData } = data;
+    socket.to(roomId).emit("call_accepted", signalData);
+  });
+
+  socket.on("end_call", (data) => {
+    const { roomId } = data;
+    socket.to(roomId).emit("call_ended");
+  });
+  // ----------------------------------
+
   socket.on("leave_chat", () => {
     handleUserLeaving(socket);
   });
