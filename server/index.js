@@ -79,8 +79,8 @@ io.on("connection", (socket) => {
 
   // --- WebRTC Signaling for Calls ---
   socket.on("call_user", (data) => {
-    const { roomId, signalData } = data;
-    socket.to(roomId).emit("incoming_call", { signal: signalData });
+    const { roomId, signalData, type } = data;
+    socket.to(roomId).emit("incoming_call", { signal: signalData, type });
   });
 
   socket.on("answer_call", (data) => {
