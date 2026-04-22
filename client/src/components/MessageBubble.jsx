@@ -39,14 +39,14 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete }
                 <img 
                   src={message} 
                   alt="shared" 
-                  className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
+                  className="w-full h-full object-cover transition-all duration-300 blur-md group-hover/img:blur-0 group-hover/img:scale-105"
                   onClick={() => setIsZoomed(true)}
                 />
                 <div 
                   onClick={() => setIsZoomed(true)}
-                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                  className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-100 group-hover/img:opacity-0 transition-opacity"
                 >
-                  <Maximize2 className="w-6 h-6 text-white" />
+                  <Maximize2 className="w-5 h-5 text-white/70" />
                 </div>
               </div>
             ) : (

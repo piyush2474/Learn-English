@@ -69,7 +69,7 @@ const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, i
               className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors text-green-500"
             >
               <UserRound className="w-4 h-4" />
-              <span className="text-[13px] font-medium">Voice Call</span>
+              <span className="text-[13px] font-medium">Transcription</span>
             </div>
             
             <div 
@@ -80,7 +80,7 @@ const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, i
               className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors text-blue-500"
             >
               <Tv className="w-4 h-4" />
-              <span className="text-[13px] font-medium">Video Call</span>
+              <span className="text-[13px] font-medium">Virtualization</span>
             </div>
           </>
         )}
