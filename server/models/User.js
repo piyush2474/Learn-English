@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema({
   }],
   pendingRequests: [{
     from: String,
+    fromName: String,
     timestamp: { type: Date, default: Date.now }
   }],
   lastActive: { 

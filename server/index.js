@@ -59,6 +59,7 @@ io.on("connection", (socket) => {
     const friendData = await User.find({ userId: { $in: user.friends } });
     const friendsList = friendData.map(f => ({
       userId: f.userId,
+      name: f.name || "Stranger",
       isOnline: onlineUsers.has(f.userId)
     }));
 
@@ -117,11 +118,22 @@ io.on("connection", (socket) => {
     });
     
     const isOtherOnline = onlineUsers.has(fromUserId);
-    socket.emit("friend_added", { userId: fromUserId, isOnline: isOtherOnline });
+    const me = await User.findOne({ userId: socket.userId });
+    const other = await User.findOne({ userId: fromUserId });
+
+    socket.emit("friend_added", { 
+      userId: fromUserId, 
+      name: other.name || "Stranger", 
+      isOnline: isOtherOnline 
+    });
     
     const otherUserSocket = onlineUsers.get(fromUserId);
     if (otherUserSocket) {
-      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId, isOnline: true });
+      io.to(otherUserSocket).emit("friend_added", { 
+        userId: socket.userId, 
+        name: me.name || "Stranger", 
+        isOnline: true 
+      });
     }
   });
   // ------------------------------
@@ -193,26 +205,6 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("matched", { roomId, isPrivate: true });
   });
 
-  socket.on("accept_friend_request", async (data) => {
-    const { fromUserId } = data;
-    if (!socket.userId) return;
-
-    await User.findOneAndUpdate({ userId: socket.userId }, { 
-      $addToSet: { friends: fromUserId },
-      $pull: { pendingRequests: { from: fromUserId } }
-    });
-    await User.findOneAndUpdate({ userId: fromUserId }, { 
-      $addToSet: { friends: socket.userId } 
-    });
-    
-    const isOtherOnline = onlineUsers.has(fromUserId);
-    socket.emit("friend_added", { userId: fromUserId, isOnline: isOtherOnline });
-    
-    const otherUserSocket = onlineUsers.get(fromUserId);
-    if (otherUserSocket) {
-      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId, isOnline: true });
-    }
-  });
 
   socket.on("delete_message", (data) => {
     const { roomId, messageId } = data;
@@ -224,7 +216,6 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("exchange_keys", { publicKey });
   });
 
-  });
 
   socket.on("typing", (data) => {
     const { roomId, isTyping } = data;

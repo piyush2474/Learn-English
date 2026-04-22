@@ -106,8 +106,7 @@ const Home = () => {
 
     socket.on('rejoin_failed', () => {
       sessionStorage.removeItem('current_room_id');
-      setStatus('Connected');
-      findNewPartner();
+      setStatus('Idle');
     });
 
     socket.on('user_count', (count) => {
@@ -178,7 +177,7 @@ const Home = () => {
       setFriends(prev => {
         const exists = prev.find(f => f.userId === data.userId);
         if (exists) return prev;
-        return [...prev, { userId: data.userId, isOnline: data.isOnline }];
+        return [...prev, { userId: data.userId, name: data.name, isOnline: data.isOnline }];
       });
       setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
     });
@@ -208,17 +207,12 @@ const Home = () => {
       setStatus('Disconnected');
       setMessages((prev) => [
         ...prev,
-        { message: 'Stranger has disconnected. Finding someone new...', senderId: 'system', timestamp: new Date().toISOString() }
+        { message: 'Stranger has disconnected.', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
       setRoomId(null);
       setSharedKey(null); // Reset encryption
       sessionStorage.removeItem('current_room_id');
       endCall();
-
-      // Automatically search for a new partner after 2 seconds
-      setTimeout(() => {
-        findNewPartner();
-      }, 2000);
     });
 
     // --- WebRTC Listeners ---
@@ -496,6 +490,16 @@ const Home = () => {
     sessionStorage.removeItem('current_room_id');
   };
 
+  const endSession = () => {
+    endCall();
+    socket.emit('leave_chat');
+    setStatus('Idle');
+    setMessages([]);
+    setRoomId(null);
+    setSharedKey(null);
+    sessionStorage.removeItem('current_room_id');
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputText.trim() || !roomId) return;
@@ -740,6 +744,7 @@ const Home = () => {
       <Sidebar 
         status={status} 
         onNewChat={findNewPartner} 
+        onEndSession={endSession}
         userCount={userCount} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
