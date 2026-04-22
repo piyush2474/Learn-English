@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -22,6 +22,9 @@ const Home = () => {
   const [friends, setFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [myUserId, setMyUserId] = useState(null);
+  const [myName, setMyName] = useState('Stranger');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [nameInput, setNameInput] = useState('');
   const [myKeyPair, setMyKeyPair] = useState(null);
   const [sharedKey, setSharedKey] = useState(null);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -187,8 +190,14 @@ const Home = () => {
     });
 
     socket.on('init_data', (data) => {
+      setMyName(data.name || 'Stranger');
+      setNameInput(data.name || 'Stranger');
       setFriends(data.friends || []);
       setFriendRequests(data.pendingRequests || []);
+    });
+
+    socket.on('profile_updated', (data) => {
+      setMyName(data.name);
     });
 
     socket.on('partner_disconnected', () => {
@@ -267,6 +276,7 @@ const Home = () => {
       socket.off('friend_status_update');
       socket.off('incoming_friend_request');
       socket.off('init_data');
+      socket.off('profile_updated');
       // socket.disconnect(); // REMOVED: Keep connection stable
     };
   }, [myUserId, myKeyPair]); // Reduced dependencies to prevent blinks
@@ -569,6 +579,12 @@ const Home = () => {
     socket.emit("accept_friend_request", { fromUserId });
   };
 
+  const updateProfile = () => {
+    if (!nameInput.trim()) return;
+    socket.emit("update_profile", { name: nameInput });
+    setIsSettingsOpen(false);
+  };
+
   const handleTyping = (e) => {
     setInputText(e.target.value);
     if (!roomId) return;
@@ -748,11 +764,14 @@ const Home = () => {
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
-            {status === 'Matched' && !friends.includes(roomId) && (
+            {status === 'Matched' && !friends.find(f => f.userId === roomId) && (
               <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
                 <UserPlus className="w-5 h-5" />
               </button>
             )}
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-white/5 rounded-lg text-gray-400" title="Settings">
+              <Settings className="w-5 h-5" />
+            </button>
           </div>
         </header>
 
@@ -766,8 +785,8 @@ const Home = () => {
                   <UserPlus className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-white">New Friend Request</p>
-                  <p className="text-xs text-gray-400">Someone wants to be friends!</p>
+                  <p className="text-sm font-medium text-white">{friendRequests[0].fromName || 'Stranger'}</p>
+                  <p className="text-xs text-gray-400">Wants to be friends!</p>
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
@@ -878,6 +897,43 @@ const Home = () => {
             Learn English can help you practice conversations in real-time.
           </p>
         </footer>
+        {/* Settings Modal */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-[#2f2f2f] w-full max-w-sm rounded-3xl border border-[#3d3d3d] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white">Profile Settings</h2>
+                <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-white">
+                  <CloseIcon className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    placeholder="Enter your name..."
+                    className="w-full bg-[#171717] border border-[#3d3d3d] rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+                
+                <p className="text-xs text-gray-500 italic">
+                  This name will be shown to people you send friend requests to.
+                </p>
+
+                <button 
+                  onClick={updateProfile}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-4 transition-colors"
+                >
+                  Save Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

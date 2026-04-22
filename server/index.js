@@ -31,7 +31,6 @@ const io = new Server(server, {
   pingInterval: 10000
 });
 
-const activeUsers = new Set();
 const rooms = new Map(); // Store room state: roomId -> { users: Set(userIds), sockets: Map(userId -> socketId) }
 const disconnectTimeouts = new Map(); // roomId -> timeoutId
 
@@ -64,6 +63,7 @@ io.on("connection", (socket) => {
     }));
 
     socket.emit("init_data", { 
+      name: user.name || "Stranger",
       friends: friendsList,
       pendingRequests: user.pendingRequests 
     });
@@ -77,25 +77,37 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("update_profile", async (data) => {
+    const { name } = data;
+    if (socket.userId) {
+      await User.findOneAndUpdate({ userId: socket.userId }, { name });
+      socket.emit("profile_updated", { name });
+    }
+  });
+
   socket.on("send_friend_request", async (data) => {
     const { roomId } = data;
+    if (!rooms.has(roomId)) return;
     const partnerId = [...rooms.get(roomId).users].find(id => id !== socket.userId);
     
     if (partnerId) {
+      const me = await User.findOne({ userId: socket.userId });
       await User.findOneAndUpdate(
         { userId: partnerId },
-        { $addToSet: { pendingRequests: { from: socket.userId } } }
+        { $addToSet: { pendingRequests: { from: socket.userId, fromName: me.name || "Stranger" } } }
       );
       
       const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
-      io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId });
+      if (partnerSocketId) {
+        io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId, fromName: me.name || "Stranger" });
+      }
     }
   });
 
   socket.on("accept_friend_request", async (data) => {
     const { fromUserId } = data;
-    
-    // Add to both friend lists
+    if (!socket.userId) return;
+
     await User.findOneAndUpdate({ userId: socket.userId }, { 
       $addToSet: { friends: fromUserId },
       $pull: { pendingRequests: { from: fromUserId } }
@@ -104,15 +116,12 @@ io.on("connection", (socket) => {
       $addToSet: { friends: socket.userId } 
     });
     
-    socket.emit("friend_added", { userId: fromUserId });
+    const isOtherOnline = onlineUsers.has(fromUserId);
+    socket.emit("friend_added", { userId: fromUserId, isOnline: isOtherOnline });
     
-    // Notify the other user if they are online
-    const otherUserSocket = [...activeUsers].find(sId => {
-      const s = io.sockets.sockets.get(sId);
-      return s && s.userId === fromUserId;
-    });
+    const otherUserSocket = onlineUsers.get(fromUserId);
     if (otherUserSocket) {
-      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId });
+      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId, isOnline: true });
     }
   });
   // ------------------------------
