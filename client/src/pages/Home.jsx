@@ -218,7 +218,7 @@ const Home = () => {
     checkVolume();
   };
 
-  const createPeerConnection = (roomId) => {
+  const createPeerConnection = (roomId, type) => {
     const pc = new RTCPeerConnection({ iceServers });
 
     pc.onicecandidate = (event) => {
@@ -229,9 +229,10 @@ const Home = () => {
 
     pc.ontrack = (event) => {
       console.log("Remote track received:", event.streams[0]);
-      if (callType === 'video') {
+      if (type === 'video') {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
+          remoteVideoRef.current.play().catch(e => console.error("Video play error:", e));
         }
       } else {
         if (remoteAudioRef.current) {
@@ -274,14 +275,15 @@ const Home = () => {
   };
 
   const switchCamera = async () => {
-    // Basic implementation for mobile camera switching
-    // In a real app, you'd enumerate devices and pick the next one
     alert("Switching camera...");
   };
 
   const startCall = async (type = 'audio') => {
     try {
       setCallType(type);
+      if (type === 'video') setIsVideoCall(true);
+      setIsCalling(true);
+
       const constraints = { 
         audio: true, 
         video: type === 'video' 
@@ -295,10 +297,8 @@ const Home = () => {
       }
       
       startAudioAnalysis(stream);
-      setIsCalling(true);
-      if (type === 'video') setIsVideoCall(true);
 
-      const pc = createPeerConnection(roomId);
+      const pc = createPeerConnection(roomId, type);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
@@ -306,29 +306,33 @@ const Home = () => {
     } catch (err) {
       console.error("Failed to start call:", err);
       alert("Could not access camera/microphone.");
+      setIsVideoCall(false);
+      setIsCalling(false);
     }
   };
 
   const answerCall = async () => {
     try {
+      const type = callType; // Capture the current type
+      if (type === 'video') setIsVideoCall(true);
+      setIsReceivingCall(false);
+      setCallAccepted(true);
+
       const constraints = { 
         audio: true, 
-        video: callType === 'video' 
+        video: type === 'video' 
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       localStream.current = stream;
       
-      if (callType === 'video' && localVideoRef.current) {
+      if (type === 'video' && localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
 
       startAudioAnalysis(stream);
-      setIsReceivingCall(false);
-      setCallAccepted(true);
-      if (callType === 'video') setIsVideoCall(true);
 
-      const pc = createPeerConnection(roomId);
+      const pc = createPeerConnection(roomId, type);
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
       
       while (iceCandidatesQueue.current.length > 0) {
@@ -342,6 +346,7 @@ const Home = () => {
       socket.emit('answer_call', { roomId, signalData: answer });
     } catch (err) {
       console.error("Failed to answer call:", err);
+      setIsVideoCall(false);
     }
   };
 
