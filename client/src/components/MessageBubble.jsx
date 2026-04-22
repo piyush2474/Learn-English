@@ -22,7 +22,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete }
             <div className="font-bold text-gray-100 text-[14px]">
               {isSelf ? 'You' : 'Stranger'}
             </div>
-            {isSelf && (
+            {isSelf && type === 'image' && (
               <button 
                 onClick={() => onDelete(messageId)}
                 className="p-1.5 bg-red-500/10 text-red-400 hover:text-red-500 rounded-lg transition-all"
@@ -54,7 +54,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete }
             )}
           </div>
           <div className="text-[11px] mt-2 text-gray-500 font-medium opacity-50 uppercase tracking-tight">
-            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
           </div>
         </div>
       </div>
