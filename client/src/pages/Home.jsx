@@ -22,6 +22,7 @@ const Home = () => {
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
+  const iceCandidatesQueue = useRef([]);
   // ----------------------
 
   // Persistent User ID
@@ -108,8 +109,17 @@ const Home = () => {
 
     socket.on('call_accepted', async (signal) => {
       if (peerConnection.current) {
-        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-        setCallAccepted(true);
+        try {
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+          setCallAccepted(true);
+          // Process queued candidates
+          while (iceCandidatesQueue.current.length > 0) {
+            const candidate = iceCandidatesQueue.current.shift();
+            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        } catch (err) {
+          console.error("Error setting remote description:", err);
+        }
       }
     });
 
@@ -119,8 +129,10 @@ const Home = () => {
 
     socket.on('ice_candidate', async (candidate) => {
       try {
-        if (peerConnection.current) {
+        if (peerConnection.current && peerConnection.current.remoteDescription) {
           await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          iceCandidatesQueue.current.push(candidate);
         }
       } catch (err) {
         console.error("Error adding ice candidate:", err);
@@ -204,6 +216,12 @@ const Home = () => {
       const pc = createPeerConnection(roomId);
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
       
+      // Process queued candidates that arrived before we answered
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
@@ -226,6 +244,7 @@ const Home = () => {
     setIsReceivingCall(false);
     setCallAccepted(false);
     setIncomingSignal(null);
+    iceCandidatesQueue.current = []; // Clear the queue
     socket.emit('end_call', { roomId });
   };
 
