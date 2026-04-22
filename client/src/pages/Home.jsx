@@ -656,7 +656,7 @@ const Home = () => {
   };
 
   return (
-    <div className="h-screen h-[100dvh] bg-[#212121] flex overflow-hidden font-sans relative">
+    <div className="fixed inset-0 h-screen h-[100dvh] bg-[#212121] flex overflow-hidden font-sans relative">
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
@@ -802,7 +802,7 @@ const Home = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative min-w-0">
+      <div className="flex-1 flex flex-col relative min-w-0 h-full max-h-full">
         {/* Header (Shared for Mobile and Desktop) */}
         <header className="flex items-center justify-between p-4 border-b border-[#2f2f2f] bg-[#212121]">
           <div className="flex items-center gap-3">
@@ -934,7 +934,7 @@ const Home = () => {
 
         {/* ChatGPT Style Input Area */}
         {status !== 'Idle' && (
-          <footer className="w-full max-w-3xl mx-auto px-2 sm:px-4 pb-4 sm:pb-6 pt-2 bg-[#212121] z-20">
+          <footer className="w-full max-w-3xl mx-auto px-2 sm:px-4 pb-4 sm:pb-6 pt-2 bg-[#212121] z-20 shrink-0">
             <input 
               type="file" 
               ref={fileInputRef} 
