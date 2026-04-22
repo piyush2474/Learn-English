@@ -14,12 +14,40 @@ const Home = () => {
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
 
+  // Persistent User ID
+  const userId = useRef(localStorage.getItem('chat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`);
+
   useEffect(() => {
+    localStorage.setItem('chat_user_id', userId.current);
+
     if (!socket.connected) {
       socket.connect();
     }
 
     socket.on('connect', () => {
+      const savedRoomId = sessionStorage.getItem('current_room_id');
+      if (savedRoomId) {
+        socket.emit('rejoin_chat', { userId: userId.current, roomId: savedRoomId });
+      } else {
+        setStatus('Connected');
+        findNewPartner();
+      }
+    });
+
+    socket.on('rejoined', (data) => {
+      setStatus('Matched');
+      setRoomId(data.roomId);
+    });
+
+    socket.on('partner_rejoined', () => {
+      setMessages((prev) => [
+        ...prev,
+        { message: 'Partner is back!', senderId: 'system', timestamp: new Date().toISOString() }
+      ]);
+    });
+
+    socket.on('rejoin_failed', () => {
+      sessionStorage.removeItem('current_room_id');
       setStatus('Connected');
       findNewPartner();
     });
@@ -32,12 +60,14 @@ const Home = () => {
       setStatus('Waiting');
       setMessages([]);
       setRoomId(null);
+      sessionStorage.removeItem('current_room_id');
     });
 
     socket.on('matched', (data) => {
       setStatus('Matched');
       setRoomId(data.roomId);
       setMessages([]);
+      sessionStorage.setItem('current_room_id', data.roomId);
     });
 
     socket.on('receive_message', (data) => {
@@ -56,6 +86,7 @@ const Home = () => {
         { message: 'Stranger has disconnected.', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
       setRoomId(null);
+      sessionStorage.removeItem('current_room_id');
     });
 
     return () => {
@@ -66,15 +97,19 @@ const Home = () => {
       socket.off('receive_message');
       socket.off('typing');
       socket.off('partner_disconnected');
+      socket.off('rejoined');
+      socket.off('partner_rejoined');
+      socket.off('rejoin_failed');
       socket.disconnect();
     };
   }, []);
 
   const findNewPartner = () => {
     socket.emit('leave_chat');
-    socket.emit('find_partner');
+    socket.emit('find_partner', { userId: userId.current });
     setMessages([]);
     setRoomId(null);
+    sessionStorage.removeItem('current_room_id');
   };
 
   const handleSendMessage = (e) => {
