@@ -92,6 +92,11 @@ io.on("connection", (socket) => {
     const { roomId } = data;
     socket.to(roomId).emit("call_ended");
   });
+
+  socket.on("ice_candidate", (data) => {
+    const { roomId, candidate } = data;
+    socket.to(roomId).emit("ice_candidate", candidate);
+  });
   // ----------------------------------
 
   socket.on("leave_chat", () => {

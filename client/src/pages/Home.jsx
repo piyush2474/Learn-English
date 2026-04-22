@@ -116,6 +116,16 @@ const Home = () => {
     socket.on('call_ended', () => {
       endCall();
     });
+
+    socket.on('ice_candidate', async (candidate) => {
+      try {
+        if (peerConnection.current) {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      } catch (err) {
+        console.error("Error adding ice candidate:", err);
+      }
+    });
     // ----------------------
 
     return () => {
@@ -132,6 +142,7 @@ const Home = () => {
       socket.off('incoming_call');
       socket.off('call_accepted');
       socket.off('call_ended');
+      socket.off('ice_candidate');
       socket.disconnect();
     };
   }, []);
@@ -143,15 +154,16 @@ const Home = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        // In a more complex app, we'd send individual candidates, 
-        // but for a simple 1-to-1 we can wait for the full SDP or just use trickling if we handle it.
-        // For simplicity with Socket.IO, let's just use the final offer/answer.
+        socket.emit('ice_candidate', { roomId, candidate: event.candidate });
       }
     };
 
     pc.ontrack = (event) => {
+      console.log("Remote track received:", event.streams[0]);
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = event.streams[0];
+        // Ensure the audio is playing
+        remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
       }
     };
 
