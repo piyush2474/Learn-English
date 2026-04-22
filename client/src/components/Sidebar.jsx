@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound } from 'lucide-react';
+import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2 } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend }) => {
+const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend }) => {
   return (
     <>
       {/* Mobile Overlay */}
@@ -68,9 +68,19 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
               >
                 <div className={`w-2 h-2 rounded-full ${friend.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-600'}`} />
                 <UserRound className={`w-4 h-4 ${friend.isOnline ? 'text-gray-300' : 'text-gray-600'} group-hover:text-white`} />
-                <span className={`text-[13px] ${friend.isOnline ? 'text-gray-200' : 'text-gray-500'} truncate group-hover:text-white`}>
+                <span className={`text-[13px] flex-1 ${friend.isOnline ? 'text-gray-200' : 'text-gray-500'} truncate group-hover:text-white`}>
                   {friend.name || `Friend ${friend.userId.substring(0, 8)}...`}
                 </span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFriend(friend.userId);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-md transition-all"
+                  title="Remove Friend"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>

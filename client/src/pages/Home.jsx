@@ -29,6 +29,12 @@ const Home = () => {
   const [sharedKey, setSharedKey] = useState(null);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
+  const sharedKeyRef = useRef(null);
+
+  // Sync ref with state
+  useEffect(() => {
+    sharedKeyRef.current = sharedKey;
+  }, [sharedKey]);
 
   // --- Calling States ---
   const [isCalling, setIsCalling] = useState(false);
@@ -53,7 +59,7 @@ const Home = () => {
   const fileInputRef = useRef(null);
   // ----------------------
 
-  // Persistent User ID
+  // Persistent User ID and Key Pair
   useEffect(() => {
     let id = localStorage.getItem('chat_user_id');
     if (!id) {
@@ -62,7 +68,22 @@ const Home = () => {
     }
     setMyUserId(id);
     socket.emit("register_user", { userId: id });
+
+    const initKeys = async () => {
+      const keys = await generateKeyPair();
+      setMyKeyPair(keys);
+    };
+    initKeys();
   }, []);
+
+
+
+  // Update volume when speaker mode changes
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+    }
+  }, [isSpeakerMode]);
 
   // Robust list of free STUN servers
   const iceServers = [
@@ -127,7 +148,11 @@ const Home = () => {
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        // Show friend name in UI if possible
+        // Find friend name
+        const friend = friends.find(f => f.userId === data.roomId.replace('private_', '').replace(myUserId, '').replace('_', ''));
+        if (friend) {
+          // You could set a partnerName state here if you wanted to display it
+        }
       }
 
       // Send our public key to the partner
@@ -138,7 +163,7 @@ const Home = () => {
     });
 
     socket.on('exchange_keys', async (data) => {
-      if (myKeyPair && !sharedKey) {
+      if (myKeyPair && !sharedKeyRef.current) {
         const partnerPubKey = await importPublicKey(data.publicKey);
         const derived = await deriveSharedSecret(myKeyPair.privateKey, partnerPubKey);
         setSharedKey(derived);
@@ -147,8 +172,8 @@ const Home = () => {
 
     socket.on('receive_message', async (data) => {
       let content = data.message;
-      if (sharedKey) {
-        content = await decryptWithKey(data.message, sharedKey);
+      if (sharedKeyRef.current) {
+        content = await decryptWithKey(data.message, sharedKeyRef.current);
       }
       
       // If it's an image, convert to Blob URL for privacy
@@ -190,6 +215,10 @@ const Home = () => {
 
     socket.on('incoming_friend_request', (data) => {
       setFriendRequests(prev => [...prev, data]);
+    });
+
+    socket.on('friend_removed', (data) => {
+      setFriends(prev => prev.filter(f => f.userId !== data.userId));
     });
 
     socket.on('init_data', (data) => {
@@ -271,26 +300,14 @@ const Home = () => {
       socket.off('call_ended');
       socket.off('ice_candidate');
       socket.off('friend_added');
+      socket.off('friend_removed');
       socket.off('friend_status_update');
       socket.off('incoming_friend_request');
       socket.off('init_data');
       socket.off('profile_updated');
       // socket.disconnect(); // REMOVED: Keep connection stable
     };
-  }, [myUserId, myKeyPair]); // Reduced dependencies to prevent blinks
-
-  // Update volume when speaker mode changes
-  useEffect(() => {
-    const initKeys = async () => {
-      const keys = await generateKeyPair();
-      setMyKeyPair(keys);
-    };
-    initKeys();
-
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
-    }
-  }, [isSpeakerMode]);
+  }, [myUserId]); 
 
   const startAudioAnalysis = (stream) => {
     const context = new (window.AudioContext || window.webkitAudioContext)();
@@ -507,8 +524,8 @@ const Home = () => {
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     let encryptedText = inputText;
     
-    if (sharedKey) {
-      encryptedText = await encryptWithKey(inputText, sharedKey);
+    if (sharedKeyRef.current) {
+      encryptedText = await encryptWithKey(inputText, sharedKeyRef.current);
     }
     
     const messageData = {
@@ -541,8 +558,8 @@ const Home = () => {
       const base64Image = reader.result;
       
       let finalMessage = base64Image;
-      if (sharedKey) {
-        finalMessage = await encryptWithKey(base64Image, sharedKey);
+      if (sharedKeyRef.current) {
+        finalMessage = await encryptWithKey(base64Image, sharedKeyRef.current);
       }
 
       const messageData = {
@@ -585,6 +602,12 @@ const Home = () => {
 
   const acceptFriendRequest = (fromUserId) => {
     socket.emit("accept_friend_request", { fromUserId });
+  };
+
+  const removeFriend = (friendId) => {
+    if (window.confirm("Are you sure you want to remove this friend?")) {
+      socket.emit("remove_friend", { friendId });
+    }
   };
 
   const startPrivateChat = (friendId) => {
@@ -753,6 +776,7 @@ const Home = () => {
         callAccepted={callAccepted}
         friends={friends}
         onSelectFriend={startPrivateChat}
+        onRemoveFriend={removeFriend}
       />
 
       {/* Main Content Area */}
@@ -858,6 +882,7 @@ const Home = () => {
               socketId={socket.id} 
               status={status}
               onDeleteMessage={deleteMessage}
+              partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
             />
           )}
         </main>

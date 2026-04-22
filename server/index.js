@@ -136,6 +136,19 @@ io.on("connection", (socket) => {
       });
     }
   });
+  socket.on("remove_friend", async (data) => {
+    const { friendId } = data;
+    if (!socket.userId || !friendId) return;
+
+    await User.findOneAndUpdate({ userId: socket.userId }, { $pull: { friends: friendId } });
+    await User.findOneAndUpdate({ userId: friendId }, { $pull: { friends: socket.userId } });
+
+    socket.emit("friend_removed", { userId: friendId });
+    const friendSocket = onlineUsers.get(friendId);
+    if (friendSocket) {
+      io.to(friendSocket).emit("friend_removed", { userId: socket.userId });
+    }
+  });
   // ------------------------------
 
   // Handle Rejoin (Refresh Protection)

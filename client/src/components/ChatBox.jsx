@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 
-const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage }) => {
+const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage, partnerName }) => {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -47,6 +47,7 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage 
               key={msg.messageId}
               message={msg.message}
               isSelf={msg.senderId === socketId}
+              partnerName={partnerName}
               timestamp={msg.timestamp}
               type={msg.type}
               messageId={msg.messageId}

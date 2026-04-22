@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Languages, Trash2, X, Maximize2 } from 'lucide-react';
 
-const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete }) => {
+const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName }) => {
   const [isZoomed, setIsZoomed] = useState(false);
 
   return (
@@ -20,7 +20,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete }
         <div className="flex-1 flex flex-col pt-0.5">
           <div className="flex items-center justify-between mb-1">
             <div className="font-bold text-gray-100 text-[14px]">
-              {isSelf ? 'You' : 'Stranger'}
+              {isSelf ? 'You' : (partnerName || 'Stranger')}
             </div>
             {isSelf && type === 'image' && (
               <button 
