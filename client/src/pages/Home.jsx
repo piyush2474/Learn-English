@@ -110,9 +110,10 @@ const Home = () => {
       sessionStorage.removeItem('current_room_id');
     });
 
-    socket.on('room_joined', async (data) => {
+    socket.on('matched', async (data) => {
       setRoomId(data.roomId);
       setStatus('Matched');
+      setMessages([]); // Clear previous chat
       sessionStorage.setItem('current_room_id', data.roomId);
       
       // Send our public key to the partner
