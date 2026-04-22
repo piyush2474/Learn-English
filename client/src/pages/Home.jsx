@@ -19,14 +19,32 @@ const Home = () => {
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [callAccepted, setCallAccepted] = useState(false);
   const [incomingSignal, setIncomingSignal] = useState(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
   const iceCandidatesQueue = useRef([]);
+  const audioContext = useRef(null);
+  const analyser = useRef(null);
+  const animationFrame = useRef(null);
   // ----------------------
 
   // Persistent User ID
   const userId = useRef(localStorage.getItem('chat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`);
+
+  // Robust list of free STUN servers
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:stun.ekiga.net' },
+    { urls: 'stun:stun.ideasip.com' },
+    { urls: 'stun:stun.rixtelecom.se' },
+    { urls: 'stun:stun.schlund.de' },
+  ];
 
   useEffect(() => {
     localStorage.setItem('chat_user_id', userId.current);
@@ -159,10 +177,34 @@ const Home = () => {
     };
   }, []);
 
+  const startAudioAnalysis = (stream) => {
+    const context = new (window.AudioContext || window.webkitAudioContext)();
+    const source = context.createMediaStreamSource(stream);
+    const node = context.createAnalyser();
+    node.fftSize = 256;
+    source.connect(node);
+    
+    audioContext.current = context;
+    analyser.current = node;
+
+    const bufferLength = node.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const checkVolume = () => {
+      node.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      setIsSpeaking(average > 10); // Threshold for speaking
+      animationFrame.current = requestAnimationFrame(checkVolume);
+    };
+    checkVolume();
+  };
+
   const createPeerConnection = (roomId) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    });
+    const pc = new RTCPeerConnection({ iceServers });
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -174,8 +216,17 @@ const Home = () => {
       console.log("Remote track received:", event.streams[0]);
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = event.streams[0];
-        // Ensure the audio is playing
-        remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = 1.0;
+        
+        // Use a promise to handle browsers that block autoplay
+        const playPromise = remoteAudioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error("Autoplay was prevented:", error);
+            // Show a "Click to Unmute" button if needed, but usually interaction handles it
+          });
+        }
       }
     };
 
@@ -193,6 +244,7 @@ const Home = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStream.current = stream;
+      startAudioAnalysis(stream);
       setIsCalling(true);
 
       const pc = createPeerConnection(roomId);
@@ -210,6 +262,7 @@ const Home = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStream.current = stream;
+      startAudioAnalysis(stream);
       setIsReceivingCall(false);
       setCallAccepted(true);
 
@@ -240,10 +293,18 @@ const Home = () => {
       localStream.current.getTracks().forEach(track => track.stop());
       localStream.current = null;
     }
+    if (audioContext.current) {
+      audioContext.current.close();
+      audioContext.current = null;
+    }
+    if (animationFrame.current) {
+      cancelAnimationFrame(animationFrame.current);
+    }
     setIsCalling(false);
     setIsReceivingCall(false);
     setCallAccepted(false);
     setIncomingSignal(null);
+    setIsSpeaking(false);
     iceCandidatesQueue.current = []; // Clear the queue
     socket.emit('end_call', { roomId });
   };
@@ -320,11 +381,14 @@ const Home = () => {
 
       {/* In-Call Status Bar */}
       {(isCalling || callAccepted) && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[80] bg-[#2f2f2f] border border-green-500/30 px-6 py-2 rounded-full shadow-2xl flex items-center gap-4">
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[80] bg-[#2f2f2f] border px-6 py-2 rounded-full shadow-2xl flex items-center gap-4 transition-all duration-300 ${
+          isSpeaking ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'border-green-500/30'
+        }`}>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-white">
+            <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-green-500 animate-ping' : 'bg-green-500'}`} />
+            <span className="text-sm font-medium text-white flex items-center gap-2">
               {callAccepted ? "On Call" : "Calling..."}
+              {isSpeaking && <Mic className="w-3 h-3 text-green-500" />}
             </span>
           </div>
           <button 
