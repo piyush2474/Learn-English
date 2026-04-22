@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -19,6 +19,9 @@ const Home = () => {
   const [roomId, setRoomId] = useState(null);
   const [userCount, setUserCount] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [friends, setFriends] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [myUserId, setMyUserId] = useState(null);
   const [myKeyPair, setMyKeyPair] = useState(null);
   const [sharedKey, setSharedKey] = useState(null);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -48,7 +51,15 @@ const Home = () => {
   // ----------------------
 
   // Persistent User ID
-  const userId = useRef(localStorage.getItem('chat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`);
+  useEffect(() => {
+    let id = localStorage.getItem('chat_user_id');
+    if (!id) {
+      id = 'user_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('chat_user_id', id);
+    }
+    setMyUserId(id);
+    socket.emit("register_user", { userId: id });
+  }, []);
 
   // Robust list of free STUN servers
   const iceServers = [
@@ -65,8 +76,6 @@ const Home = () => {
   ];
 
   useEffect(() => {
-    localStorage.setItem('chat_user_id', userId.current);
-
     if (!socket.connected) {
       socket.connect();
     }
@@ -74,7 +83,7 @@ const Home = () => {
     socket.on('connect', () => {
       const savedRoomId = sessionStorage.getItem('current_room_id');
       if (savedRoomId) {
-        socket.emit('rejoin_chat', { userId: userId.current, roomId: savedRoomId });
+        socket.emit('rejoin_chat', { userId: myUserId, roomId: savedRoomId });
       } else {
         setStatus('Connected');
         findNewPartner();
@@ -159,6 +168,20 @@ const Home = () => {
       setIsPartnerTyping(data.isTyping);
     });
 
+    socket.on('friend_added', (data) => {
+      setFriends(prev => [...new Set([...prev, data.userId])]);
+      setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
+    });
+
+    socket.on('incoming_friend_request', (data) => {
+      setFriendRequests(prev => [...prev, data]);
+    });
+
+    socket.on('init_data', (data) => {
+      setFriends(data.friends || []);
+      setFriendRequests(data.pendingRequests || []);
+    });
+
     socket.on('partner_disconnected', () => {
       setStatus('Disconnected');
       setMessages((prev) => [
@@ -231,9 +254,12 @@ const Home = () => {
       socket.off('call_accepted');
       socket.off('call_ended');
       socket.off('ice_candidate');
+      socket.off('friend_added');
+      socket.off('incoming_friend_request');
+      socket.off('init_data');
       socket.disconnect();
     };
-  }, []);
+  }, [myUserId, myKeyPair, sharedKey]);
 
   // Update volume when speaker mode changes
   useEffect(() => {
@@ -437,7 +463,7 @@ const Home = () => {
   const findNewPartner = () => {
     endCall();
     socket.emit('leave_chat');
-    socket.emit('find_partner', { userId: userId.current });
+    socket.emit('find_partner', { userId: myUserId });
     setMessages([]);
     setRoomId(null);
     sessionStorage.removeItem('current_room_id');
@@ -518,6 +544,16 @@ const Home = () => {
     if (!roomId) return;
     socket.emit('delete_message', { roomId, messageId });
     setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
+  };
+
+  const sendFriendRequest = () => {
+    if (!roomId) return;
+    socket.emit("send_friend_request", { roomId });
+    alert("Friend request sent!");
+  };
+
+  const acceptFriendRequest = (fromUserId) => {
+    socket.emit("accept_friend_request", { fromUserId });
   };
 
   const handleTyping = (e) => {
@@ -671,6 +707,7 @@ const Home = () => {
         onStartCall={startCall}
         isCalling={isCalling}
         callAccepted={callAccepted}
+        friends={friends}
       />
 
       {/* Main Content Area */}
@@ -698,11 +735,45 @@ const Home = () => {
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
+            {status === 'Matched' && !friends.includes(roomId) && (
+              <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
+                <UserPlus className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </header>
 
         {/* Chat Interface */}
-        <main className="flex-1 flex flex-col min-h-0 bg-[#212121]">
+        <main className="flex-1 flex flex-col min-h-0 bg-[#212121] relative">
+          {/* Friend Request Toast */}
+          {friendRequests.length > 0 && (
+            <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <UserPlus className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white">New Friend Request</p>
+                  <p className="text-xs text-gray-400">Someone wants to be friends!</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button 
+                  onClick={() => acceptFriendRequest(friendRequests[0].from)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
+                >
+                  Accept
+                </button>
+                <button 
+                  onClick={() => setFriendRequests(prev => prev.slice(1))}
+                  className="flex-1 bg-[#3d3d3d] hover:bg-[#4d4d4d] text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          )}
+
           <ChatBox 
             messages={messages} 
             isPartnerTyping={isPartnerTyping} 

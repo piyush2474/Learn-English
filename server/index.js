@@ -2,10 +2,20 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const mongoose = require("mongoose");
+const User = require("./models/User");
 const { handleMatchmaking, removeFromQueue } = require("./socket/matchmaking");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
+
+// --- Database Connection ---
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/learn_english_chat";
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.error("MongoDB connection error:", err));
+// --------------------------
 
 const server = http.createServer(app);
 
@@ -30,6 +40,65 @@ io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
   activeUsers.add(socket.id);
   updateUserCount();
+
+  // --- Friend System Listeners ---
+  socket.on("register_user", async (data) => {
+    const { userId } = data;
+    socket.userId = userId;
+    
+    let user = await User.findOne({ userId });
+    if (!user) {
+      user = new User({ userId });
+      await user.save();
+    }
+    
+    // Send back current friend data
+    const friends = await User.find({ userId: { $in: user.friends } });
+    socket.emit("init_data", { 
+      friends: friends.map(f => f.userId),
+      pendingRequests: user.pendingRequests 
+    });
+  });
+
+  socket.on("send_friend_request", async (data) => {
+    const { roomId } = data;
+    const partnerId = [...rooms.get(roomId).users].find(id => id !== socket.userId);
+    
+    if (partnerId) {
+      await User.findOneAndUpdate(
+        { userId: partnerId },
+        { $addToSet: { pendingRequests: { from: socket.userId } } }
+      );
+      
+      const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
+      io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId });
+    }
+  });
+
+  socket.on("accept_friend_request", async (data) => {
+    const { fromUserId } = data;
+    
+    // Add to both friend lists
+    await User.findOneAndUpdate({ userId: socket.userId }, { 
+      $addToSet: { friends: fromUserId },
+      $pull: { pendingRequests: { from: fromUserId } }
+    });
+    await User.findOneAndUpdate({ userId: fromUserId }, { 
+      $addToSet: { friends: socket.userId } 
+    });
+    
+    socket.emit("friend_added", { userId: fromUserId });
+    
+    // Notify the other user if they are online
+    const otherUserSocket = [...activeUsers].find(sId => {
+      const s = io.sockets.sockets.get(sId);
+      return s && s.userId === fromUserId;
+    });
+    if (otherUserSocket) {
+      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId });
+    }
+  });
+  // ------------------------------
 
   // Handle Rejoin (Refresh Protection)
   socket.on("rejoin_chat", (data) => {
