@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2, Info } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend }) => {
+const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform }) => {
   return (
     <>
       {/* Mobile Overlay */}
@@ -131,6 +131,17 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
           </div>
         </div>
         
+        <div 
+          onClick={() => {
+            onInform();
+            onClose();
+          }}
+          className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors"
+        >
+          <Info className="w-4 h-4 text-gray-400" />
+          <span className="text-[13px] text-gray-200">Inform</span>
+        </div>
+
         <div 
           onClick={() => {
             onEndSession();

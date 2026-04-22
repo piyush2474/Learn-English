@@ -47,6 +47,9 @@ const Home = () => {
   const [incomingSignal, setIncomingSignal] = useState(null);
   const [callType, setCallType] = useState('audio'); // 'audio' or 'video'
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isInformModalOpen, setIsInformModalOpen] = useState(false);
+  const [informMessage, setInformMessage] = useState('');
+  const [isSendingInform, setIsSendingInform] = useState(false);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -232,6 +235,17 @@ const Home = () => {
       setMyName(data.name);
     });
 
+    socket.on('inform_sent', (data) => {
+      setIsSendingInform(false);
+      if (data.success) {
+        alert("Information sent successfully!");
+        setIsInformModalOpen(false);
+        setInformMessage('');
+      } else {
+        alert("Error: " + data.error);
+      }
+    });
+
     socket.on('partner_disconnected', () => {
       setStatus('Disconnected');
       setMessages((prev) => [
@@ -305,6 +319,7 @@ const Home = () => {
       socket.off('incoming_friend_request');
       socket.off('init_data');
       socket.off('profile_updated');
+      socket.off('inform_sent');
       // socket.disconnect(); // REMOVED: Keep connection stable
     };
   }, [myUserId]); 
@@ -622,6 +637,12 @@ const Home = () => {
     setIsSettingsOpen(false);
   };
 
+  const handleSendInform = () => {
+    if (!informMessage.trim()) return;
+    setIsSendingInform(true);
+    socket.emit("inform_owner", { message: informMessage, senderName: myName });
+  };
+
   const handleTyping = (e) => {
     setInputText(e.target.value);
     if (!roomId) return;
@@ -777,6 +798,7 @@ const Home = () => {
         friends={friends}
         onSelectFriend={startPrivateChat}
         onRemoveFriend={removeFriend}
+        onInform={() => setIsInformModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -976,6 +998,46 @@ const Home = () => {
           </div>
         )}
       </div>
+      {/* Inform Modal */}
+      {isInformModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#2f2f2f] w-full max-w-md p-6 rounded-3xl border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">Inform Owner</h3>
+              <button onClick={() => setIsInformModalOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <CloseIcon className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+            
+            <p className="text-gray-400 text-sm mb-4">Send a direct message or feedback to the platform owner.</p>
+            
+            <textarea 
+              value={informMessage}
+              onChange={(e) => setInformMessage(e.target.value)}
+              placeholder="Type your message here..."
+              className="w-full h-40 bg-[#212121] border border-white/10 rounded-2xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors resize-none mb-6"
+            />
+            
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setIsInformModalOpen(false)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSendInform}
+                disabled={isSendingInform || !informMessage.trim()}
+                className={`flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold transition-colors ${
+                  (isSendingInform || !informMessage.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isSendingInform ? 'Sending...' : 'Send Message'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,7 +5,18 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const { handleMatchmaking, removeFromQueue } = require("./socket/matchmaking");
+const nodemailer = require("nodemailer");
 require("dotenv").config();
+
+// --- Email Configuration ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+// --------------------------
 
 const app = express();
 app.use(cors());
@@ -150,6 +161,25 @@ io.on("connection", (socket) => {
     }
   });
   // ------------------------------
+
+  socket.on("inform_owner", async (data) => {
+    const { message, senderName } = data;
+    
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.OWNER_EMAIL,
+      subject: `New Information/Feedback from ${senderName || 'Anonymous'}`,
+      text: `You have received a new message from ${senderName || 'a user'}:\n\n${message}`
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      socket.emit("inform_sent", { success: true });
+    } catch (error) {
+      console.error("Email error:", error);
+      socket.emit("inform_sent", { success: false, error: "Failed to send email" });
+    }
+  });
 
   // Handle Rejoin (Refresh Protection)
   socket.on("rejoin_chat", (data) => {
