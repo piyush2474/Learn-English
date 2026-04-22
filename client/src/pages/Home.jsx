@@ -13,7 +13,7 @@ import {
 } from '../utils/crypto';
 
 const Home = () => {
-  const [status, setStatus] = useState('Disconnected');
+  const [status, setStatus] = useState('Idle');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -85,8 +85,7 @@ const Home = () => {
       if (savedRoomId) {
         socket.emit('rejoin_chat', { userId: myUserId, roomId: savedRoomId });
       } else {
-        setStatus('Connected');
-        findNewPartner();
+        setStatus('Idle');
       }
     });
 
@@ -169,8 +168,18 @@ const Home = () => {
     });
 
     socket.on('friend_added', (data) => {
-      setFriends(prev => [...new Set([...prev, data.userId])]);
+      setFriends(prev => {
+        const exists = prev.find(f => f.userId === data.userId);
+        if (exists) return prev;
+        return [...prev, { userId: data.userId, isOnline: data.isOnline }];
+      });
       setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
+    });
+
+    socket.on('friend_status_update', (data) => {
+      setFriends(prev => prev.map(f => 
+        f.userId === data.userId ? { ...f, isOnline: data.isOnline } : f
+      ));
     });
 
     socket.on('incoming_friend_request', (data) => {
@@ -255,11 +264,12 @@ const Home = () => {
       socket.off('call_ended');
       socket.off('ice_candidate');
       socket.off('friend_added');
+      socket.off('friend_status_update');
       socket.off('incoming_friend_request');
       socket.off('init_data');
-      socket.disconnect();
+      // socket.disconnect(); // REMOVED: Keep connection stable
     };
-  }, [myUserId, myKeyPair, sharedKey]);
+  }, [myUserId, myKeyPair]); // Reduced dependencies to prevent blinks
 
   // Update volume when speaker mode changes
   useEffect(() => {
@@ -461,11 +471,14 @@ const Home = () => {
   };
 
   const findNewPartner = () => {
+    if (!myUserId) return;
     endCall();
     socket.emit('leave_chat');
     socket.emit('find_partner', { userId: myUserId });
+    setStatus('Waiting');
     setMessages([]);
     setRoomId(null);
+    setSharedKey(null);
     sessionStorage.removeItem('current_room_id');
   };
 
@@ -774,13 +787,44 @@ const Home = () => {
             </div>
           )}
 
-          <ChatBox 
-            messages={messages} 
-            isPartnerTyping={isPartnerTyping} 
-            socketId={socket.id} 
-            status={status}
-            onDeleteMessage={deleteMessage}
-          />
+          {status === 'Idle' ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-700">
+              <div className="max-w-md space-y-4">
+                <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                  <Globe className="w-10 h-10 text-blue-500" />
+                </div>
+                <h1 className="text-4xl font-bold text-white tracking-tight">Ready to Practice?</h1>
+                <p className="text-gray-400 text-lg">Connect with a random English learner and improve your speaking skills anonymously.</p>
+              </div>
+
+              <button 
+                onClick={findNewPartner}
+                className="group relative flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-10 py-5 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-500/20"
+              >
+                <span>Find Partner</span>
+                <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+              </button>
+
+              <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span>{userCount} Online</span>
+                </div>
+                <span>•</span>
+                <span>Encrypted</span>
+                <span>•</span>
+                <span>Anonymous</span>
+              </div>
+            </div>
+          ) : (
+            <ChatBox 
+              messages={messages} 
+              isPartnerTyping={isPartnerTyping} 
+              socketId={socket.id} 
+              status={status}
+              onDeleteMessage={deleteMessage}
+            />
+          )}
         </main>
 
         {/* ChatGPT Style Input Area */}

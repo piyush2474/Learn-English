@@ -17,6 +17,9 @@ mongoose.connect(MONGODB_URI)
   .catch((err) => console.error("MongoDB connection error:", err));
 // --------------------------
 
+const activeUsers = new Set();
+const onlineUsers = new Map(); // userId -> socketId mapping
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -45,6 +48,7 @@ io.on("connection", (socket) => {
   socket.on("register_user", async (data) => {
     const { userId } = data;
     socket.userId = userId;
+    onlineUsers.set(userId, socket.id);
     
     let user = await User.findOne({ userId });
     if (!user) {
@@ -52,11 +56,24 @@ io.on("connection", (socket) => {
       await user.save();
     }
     
-    // Send back current friend data
-    const friends = await User.find({ userId: { $in: user.friends } });
+    // Fetch friends and their online status
+    const friendData = await User.find({ userId: { $in: user.friends } });
+    const friendsList = friendData.map(f => ({
+      userId: f.userId,
+      isOnline: onlineUsers.has(f.userId)
+    }));
+
     socket.emit("init_data", { 
-      friends: friends.map(f => f.userId),
+      friends: friendsList,
       pendingRequests: user.pendingRequests 
+    });
+
+    // Notify friends that this user is now online
+    user.friends.forEach(fId => {
+      const fSocket = onlineUsers.get(fId);
+      if (fSocket) {
+        io.to(fSocket).emit("friend_status_update", { userId, isOnline: true });
+      }
     });
   });
 
@@ -146,6 +163,44 @@ io.on("connection", (socket) => {
   socket.on("exchange_keys", (data) => {
     const { roomId, publicKey } = data;
     socket.to(roomId).emit("exchange_keys", { publicKey });
+  });
+
+  socket.on("send_friend_request", async (data) => {
+    const { roomId } = data;
+    if (!rooms.has(roomId)) return;
+    const partnerId = [...rooms.get(roomId).users].find(id => id !== socket.userId);
+    
+    if (partnerId) {
+      await User.findOneAndUpdate(
+        { userId: partnerId },
+        { $addToSet: { pendingRequests: { from: socket.userId } } }
+      );
+      
+      const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
+      if (partnerSocketId) {
+        io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId });
+      }
+    }
+  });
+
+  socket.on("accept_friend_request", async (data) => {
+    const { fromUserId } = data;
+    
+    await User.findOneAndUpdate({ userId: socket.userId }, { 
+      $addToSet: { friends: fromUserId },
+      $pull: { pendingRequests: { from: fromUserId } }
+    });
+    await User.findOneAndUpdate({ userId: fromUserId }, { 
+      $addToSet: { friends: socket.userId } 
+    });
+    
+    const isOtherOnline = onlineUsers.has(fromUserId);
+    socket.emit("friend_added", { userId: fromUserId, isOnline: isOtherOnline });
+    
+    const otherUserSocket = onlineUsers.get(fromUserId);
+    if (otherUserSocket) {
+      io.to(otherUserSocket).emit("friend_added", { userId: socket.userId, isOnline: true });
+    }
   });
 
   socket.on("typing", (data) => {
