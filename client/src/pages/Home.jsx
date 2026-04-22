@@ -873,23 +873,22 @@ const Home = () => {
           )}
 
           {status === 'Idle' ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-700">
-              <div className="max-w-md space-y-4">
-                <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 transform hover:rotate-12 transition-transform duration-500">
-                  <Globe className="w-10 h-10 text-blue-500" />
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 animate-in fade-in duration-700">
+              <div className="max-w-md space-y-6">
+                <div className="w-24 h-24 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 transform hover:rotate-12 transition-transform duration-500 shadow-2xl shadow-blue-500/5">
+                  <Globe className="w-12 h-12 text-blue-500" />
                 </div>
-                <h1 className="text-5xl font-extrabold text-white tracking-tight">Practice English <br/><span className="text-blue-500 text-3xl font-bold">Anonymously</span></h1>
-                <p className="text-gray-400 text-lg font-medium">Connect instantly with learners around the world. No registration required to chat.</p>
+                <h1 className="text-6xl font-extrabold text-white tracking-tighter">Practice <br/><span className="text-blue-500">English</span></h1>
               </div>
 
               <button 
                 onClick={findNewPartner}
-                className="group relative flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-blue-500/20"
+                className="group relative flex items-center gap-4 bg-white hover:bg-gray-200 text-black px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-white/5"
               >
-                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors">
-                  <Plus className="w-5 h-5 text-white" />
+                <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center group-hover:bg-black/10 transition-colors">
+                  <Plus className="w-5 h-5 text-black" />
                 </div>
-                <span>Learn English Now</span>
+                <span>Start Learning</span>
               </button>
 
               <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
@@ -934,56 +933,58 @@ const Home = () => {
         </main>
 
         {/* ChatGPT Style Input Area */}
-        <footer className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleImageUpload} 
-            accept="image/*" 
-            className="hidden" 
-          />
-          <form 
-            onSubmit={handleSendMessage}
-            className="relative flex items-center bg-[#2f2f2f] rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
-          >
-            <button
-              type="button"
-              onClick={() => fileInputRef.current.click()}
-              disabled={status !== 'Matched'}
-              className="pl-4 pr-2 text-gray-400 hover:text-white transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <textarea
-              rows="1"
-              value={inputText}
-              onChange={handleTyping}
-              disabled={status !== 'Matched'}
-              placeholder="Message Learn English..."
-              className="w-full bg-transparent text-white px-5 py-4 pr-12 resize-none focus:outline-none min-h-[52px] max-h-48 scrollbar-hide text-[15px]"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e);
-                }
-              }}
+        {status !== 'Idle' && (
+          <footer className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImageUpload} 
+              accept="image/*" 
+              className="hidden" 
             />
-            <button
-              type="submit"
-              disabled={status !== 'Matched' || !inputText.trim()}
-              className={`absolute right-2 p-1.5 rounded-xl transition-all ${
-                inputText.trim() && status === 'Matched' 
-                  ? 'bg-white text-black' 
-                  : 'bg-[#404040] text-[#171717]'
-              }`}
+            <form 
+              onSubmit={handleSendMessage}
+              className="relative flex items-center bg-[#2f2f2f] rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
             >
-              <ArrowUp className="w-5 h-5 stroke-[2.5]" />
-            </button>
-          </form>
-          <p className="text-[11px] text-center text-gray-500 mt-3 font-medium">
-            Learn English can help you practice conversations in real-time.
-          </p>
-        </footer>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current.click()}
+                disabled={status !== 'Matched'}
+                className="pl-4 pr-2 text-gray-400 hover:text-white transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+              <textarea
+                rows="1"
+                value={inputText}
+                onChange={handleTyping}
+                disabled={status !== 'Matched'}
+                placeholder="Message Learn English..."
+                className="w-full bg-transparent text-white px-5 py-4 pr-12 resize-none focus:outline-none min-h-[52px] max-h-48 scrollbar-hide text-[15px]"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={status !== 'Matched' || !inputText.trim()}
+                className={`absolute right-2 p-1.5 rounded-xl transition-all ${
+                  inputText.trim() && status === 'Matched' 
+                    ? 'bg-white text-black' 
+                    : 'bg-[#404040] text-[#171717]'
+                }`}
+              >
+                <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+              </button>
+            </form>
+            <p className="text-[11px] text-center text-gray-500 mt-3 font-medium">
+              Learn English can help you practice conversations in real-time.
+            </p>
+          </footer>
+        )}
         {/* Settings Modal */}
         {isSettingsOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">

@@ -18,8 +18,8 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
         <div className={`
           relative px-4 py-2.5 rounded-2xl shadow-sm
           ${isSelf 
-            ? 'bg-[#3b82f6] text-white rounded-tr-sm' 
-            : 'bg-[#2f2f2f] text-gray-100 rounded-tl-sm'
+            ? 'bg-[#444654] text-white rounded-tr-sm' 
+            : 'bg-[#2f2f2f] text-gray-100 rounded-tl-sm border border-white/5'
           }
         `}>
           {/* Delete Button for Self Images */}
