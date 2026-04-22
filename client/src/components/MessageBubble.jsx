@@ -16,10 +16,10 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
 
         {/* Bubble Container */}
         <div className={`
-          relative px-3 py-2 rounded-2xl shadow-sm
+          relative px-4 py-2.5 rounded-2xl shadow-sm
           ${isSelf 
-            ? 'bg-[#005c4b] text-white rounded-tr-none border border-white/5' 
-            : 'bg-[#202c33] text-gray-100 rounded-tl-none border border-white/5'
+            ? 'bg-[#3b82f6] text-white rounded-tr-sm' 
+            : 'bg-[#2f2f2f] text-gray-100 rounded-tl-sm'
           }
         `}>
           {/* Delete Button for Self Images */}
@@ -34,21 +34,15 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
           )}
 
           {/* Message Content */}
-          <div className="text-[14.5px] leading-relaxed break-words">
+          <div className="text-[15px] leading-relaxed break-words">
             {type === 'image' ? (
-              <div className="relative mt-1 w-48 h-48 sm:w-60 sm:h-60 rounded-lg overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer">
+              <div className="relative mt-1 w-48 h-48 sm:w-60 sm:h-60 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer">
                 <img 
                   src={message} 
                   alt="shared" 
                   className="w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105"
                   onClick={() => setIsZoomed(true)}
                 />
-                <div 
-                  onClick={() => setIsZoomed(true)}
-                  className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                >
-                  <Maximize2 className="w-6 h-6 text-white/70" />
-                </div>
               </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>
@@ -56,8 +50,8 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
           </div>
 
           {/* Timestamp and Status */}
-          <div className={`flex items-center justify-end gap-1 mt-1 ${isSelf ? 'text-white/50' : 'text-gray-400/60'}`}>
-            <span className="text-[10px] font-medium uppercase">
+          <div className={`flex items-center justify-end gap-1 mt-1 ${isSelf ? 'text-white/40' : 'text-gray-500'}`}>
+            <span className="text-[10px] font-medium">
               {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
           </div>
