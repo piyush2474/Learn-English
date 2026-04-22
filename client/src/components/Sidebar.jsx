@@ -76,7 +76,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                     e.stopPropagation();
                     onRemoveFriend(friend.userId);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-md transition-all"
+                  className="opacity-60 md:opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-md transition-all"
                   title="Remove Friend"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
