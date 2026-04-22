@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1 } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -18,6 +18,7 @@ const Home = () => {
   const [isCalling, setIsCalling] = useState(false);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [callAccepted, setCallAccepted] = useState(false);
+  const [isSpeakerMode, setIsSpeakerMode] = useState(false); // Default: Ear Mode (false)
   const [incomingSignal, setIncomingSignal] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const peerConnection = useRef(null);
@@ -176,6 +177,13 @@ const Home = () => {
       socket.disconnect();
     };
   }, []);
+
+  // Update volume when speaker mode changes
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+    }
+  }, [isSpeakerMode]);
 
   const startAudioAnalysis = (stream) => {
     const context = new (window.AudioContext || window.webkitAudioContext)();
@@ -391,12 +399,28 @@ const Home = () => {
               {isSpeaking && <Mic className="w-3 h-3 text-green-500" />}
             </span>
           </div>
-          <button 
-            onClick={endCall}
-            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
-          >
-            <PhoneOff className="w-4 h-4" />
-          </button>
+
+          <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsSpeakerMode(!isSpeakerMode)}
+              title={isSpeakerMode ? "Switch to Ear Mode" : "Switch to Speaker Mode"}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isSpeakerMode ? 'bg-green-500 text-black' : 'hover:bg-white/5 text-gray-400'
+              }`}
+            >
+              {isSpeakerMode ? <Volume2 className="w-4 h-4" /> : <Volume1 className="w-4 h-4" />}
+            </button>
+
+            <button 
+              onClick={endCall}
+              title="End Call"
+              className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
+            >
+              <PhoneOff className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
