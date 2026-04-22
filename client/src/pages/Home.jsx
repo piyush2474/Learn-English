@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1 } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -18,12 +18,18 @@ const Home = () => {
   const [isCalling, setIsCalling] = useState(false);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [callAccepted, setCallAccepted] = useState(false);
+  const [isVideoCall, setIsVideoCall] = useState(false); 
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerMode, setIsSpeakerMode] = useState(false); // Default: Ear Mode (false)
   const [incomingSignal, setIncomingSignal] = useState(null);
+  const [callType, setCallType] = useState('audio'); // 'audio' or 'video'
   const [isSpeaking, setIsSpeaking] = useState(false);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const localVideoRef = useRef(null);
   const iceCandidatesQueue = useRef([]);
   const audioContext = useRef(null);
   const analyser = useRef(null);
@@ -124,6 +130,7 @@ const Home = () => {
     socket.on('incoming_call', (data) => {
       setIsReceivingCall(true);
       setIncomingSignal(data.signal);
+      setCallType(data.type || 'audio');
     });
 
     socket.on('call_accepted', async (signal) => {
@@ -222,18 +229,16 @@ const Home = () => {
 
     pc.ontrack = (event) => {
       console.log("Remote track received:", event.streams[0]);
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = event.streams[0];
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = 1.0;
-        
-        // Use a promise to handle browsers that block autoplay
-        const playPromise = remoteAudioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.error("Autoplay was prevented:", error);
-            // Show a "Click to Unmute" button if needed, but usually interaction handles it
-          });
+      if (callType === 'video') {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
+      } else {
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+          remoteAudioRef.current.muted = false;
+          remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+          remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
         }
       }
     };
@@ -248,36 +253,84 @@ const Home = () => {
     return pc;
   };
 
-  const startCall = async () => {
+  const toggleMic = () => {
+    if (localStream.current) {
+      const audioTrack = localStream.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMicMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleCamera = () => {
+    if (localStream.current) {
+      const videoTrack = localStream.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsCameraOff(!videoTrack.enabled);
+      }
+    }
+  };
+
+  const switchCamera = async () => {
+    // Basic implementation for mobile camera switching
+    // In a real app, you'd enumerate devices and pick the next one
+    alert("Switching camera...");
+  };
+
+  const startCall = async (type = 'audio') => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setCallType(type);
+      const constraints = { 
+        audio: true, 
+        video: type === 'video' 
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       localStream.current = stream;
+      
+      if (type === 'video' && localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      
       startAudioAnalysis(stream);
       setIsCalling(true);
+      if (type === 'video') setIsVideoCall(true);
 
       const pc = createPeerConnection(roomId);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit('call_user', { roomId, signalData: offer });
+      socket.emit('call_user', { roomId, signalData: offer, type });
     } catch (err) {
       console.error("Failed to start call:", err);
-      alert("Could not access microphone.");
+      alert("Could not access camera/microphone.");
     }
   };
 
   const answerCall = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const constraints = { 
+        audio: true, 
+        video: callType === 'video' 
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       localStream.current = stream;
+      
+      if (callType === 'video' && localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
       startAudioAnalysis(stream);
       setIsReceivingCall(false);
       setCallAccepted(true);
+      if (callType === 'video') setIsVideoCall(true);
 
       const pc = createPeerConnection(roomId);
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
       
-      // Process queued candidates that arrived before we answered
       while (iceCandidatesQueue.current.length > 0) {
         const candidate = iceCandidatesQueue.current.shift();
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -311,9 +364,12 @@ const Home = () => {
     setIsCalling(false);
     setIsReceivingCall(false);
     setCallAccepted(false);
+    setIsVideoCall(false);
     setIncomingSignal(null);
     setIsSpeaking(false);
-    iceCandidatesQueue.current = []; // Clear the queue
+    setIsMicMuted(false);
+    setIsCameraOff(false);
+    iceCandidatesQueue.current = [];
     socket.emit('end_call', { roomId });
   };
 
@@ -360,15 +416,75 @@ const Home = () => {
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
+      {/* Video Call Overlay */}
+      {isVideoCall && (
+        <div className="fixed inset-0 z-[150] bg-black flex flex-col items-center justify-center">
+          {/* Remote Video (Partner) */}
+          <video 
+            ref={remoteVideoRef} 
+            autoPlay 
+            playsInline 
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Local Video (Self - PIP) */}
+          <div className="absolute top-6 right-6 w-32 sm:w-48 aspect-[3/4] bg-[#1a1a1a] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+            <video 
+              ref={localVideoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''}`}
+            />
+            {isCameraOff && (
+              <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
+                <VideoOff className="w-8 h-8 text-gray-500" />
+              </div>
+            )}
+          </div>
+
+          {/* Video Controls Footer */}
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/40 backdrop-blur-xl px-8 py-4 rounded-3xl border border-white/10">
+            <button 
+              onClick={toggleMic}
+              className={`p-4 rounded-2xl transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+              {isMicMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+            
+            <button 
+              onClick={toggleCamera}
+              className={`p-4 rounded-2xl transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+              {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+            </button>
+
+            <button 
+              onClick={switchCamera}
+              className="p-4 bg-white/10 text-white hover:bg-white/20 rounded-2xl transition-all md:hidden"
+            >
+              <RefreshCw className="w-6 h-6" />
+            </button>
+
+            <button 
+              onClick={endCall}
+              className="p-4 bg-red-500 text-white hover:bg-red-600 rounded-2xl transition-all"
+            >
+              <PhoneOff className="w-6 h-6 rotate-[135deg]" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Incoming Call Modal */}
       {isReceivingCall && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#2f2f2f] p-8 rounded-3xl border border-white/10 text-center max-w-sm w-full shadow-2xl">
-            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <Phone className="w-10 h-10 text-green-500" />
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse ${callType === 'video' ? 'bg-blue-500/20' : 'bg-green-500/20'}`}>
+              {callType === 'video' ? <Video className="w-10 h-10 text-blue-500" /> : <Phone className="w-10 h-10 text-green-500" />}
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Incoming Voice Call</h3>
-            <p className="text-gray-400 mb-8 text-sm">Practice your English speaking skills!</p>
+            <h3 className="text-xl font-bold text-white mb-2">Incoming {callType === 'video' ? 'Video' : 'Voice'} Call</h3>
+            <p className="text-gray-400 mb-8 text-sm">Stranger wants to {callType === 'video' ? 'video chat' : 'speak'} with you!</p>
             <div className="flex gap-4">
               <button 
                 onClick={endCall}
@@ -378,7 +494,7 @@ const Home = () => {
               </button>
               <button 
                 onClick={answerCall}
-                className="flex-1 py-3 px-6 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold transition-colors"
+                className={`flex-1 py-3 px-6 text-white rounded-xl font-bold transition-colors ${callType === 'video' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'}`}
               >
                 Accept
               </button>
@@ -456,14 +572,22 @@ const Home = () => {
 
           <div className="flex items-center gap-2">
             {status === 'Matched' && !isCalling && !callAccepted && (
-              <button 
-                onClick={startCall}
-                title="Start Audio Call"
-                className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg transition-colors"
-              >
-                <Phone className="w-4 h-4" />
-                <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Call</span>
-              </button>
+              <>
+                <button 
+                  onClick={() => startCall('audio')}
+                  title="Audio Call"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg transition-colors"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => startCall('video')}
+                  title="Video Call"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-lg transition-colors"
+                >
+                  <Video className="w-4 h-4" />
+                </button>
+              </>
             )}
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
