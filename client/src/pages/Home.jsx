@@ -127,6 +127,10 @@ const Home = () => {
       setMessages([]); // Clear previous chat
       sessionStorage.setItem('current_room_id', data.roomId);
       
+      if (data.isPrivate) {
+        // Show friend name in UI if possible
+      }
+
       // Send our public key to the partner
       if (myKeyPair) {
         const pubKeyBase64 = await exportPublicKey(myKeyPair.publicKey);
@@ -579,6 +583,12 @@ const Home = () => {
     socket.emit("accept_friend_request", { fromUserId });
   };
 
+  const startPrivateChat = (friendId) => {
+    endCall();
+    socket.emit("start_private_chat", { friendId });
+    setMessages([]);
+  };
+
   const updateProfile = () => {
     if (!nameInput.trim()) return;
     socket.emit("update_profile", { name: nameInput });
@@ -737,6 +747,7 @@ const Home = () => {
         isCalling={isCalling}
         callAccepted={callAccepted}
         friends={friends}
+        onSelectFriend={startPrivateChat}
       />
 
       {/* Main Content Area */}
@@ -820,7 +831,7 @@ const Home = () => {
                 onClick={findNewPartner}
                 className="group relative flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-10 py-5 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-blue-500/20"
               >
-                <span>Find Partner</span>
+                <span>Learn English</span>
                 <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />
               </button>
 

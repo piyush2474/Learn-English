@@ -164,37 +164,39 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("receive_message", data);
   });
 
-  socket.on("delete_message", (data) => {
-    const { roomId, messageId } = data;
-    socket.to(roomId).emit("message_deleted", { messageId });
-  });
+  socket.on("start_private_chat", async (data) => {
+    const { friendId } = data;
+    if (!socket.userId || !friendId) return;
 
-  socket.on("exchange_keys", (data) => {
-    const { roomId, publicKey } = data;
-    socket.to(roomId).emit("exchange_keys", { publicKey });
-  });
-
-  socket.on("send_friend_request", async (data) => {
-    const { roomId } = data;
-    if (!rooms.has(roomId)) return;
-    const partnerId = [...rooms.get(roomId).users].find(id => id !== socket.userId);
-    
-    if (partnerId) {
-      await User.findOneAndUpdate(
-        { userId: partnerId },
-        { $addToSet: { pendingRequests: { from: socket.userId } } }
-      );
-      
-      const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
-      if (partnerSocketId) {
-        io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId });
-      }
+    const partnerSocketId = onlineUsers.get(friendId);
+    if (!partnerSocketId) {
+      socket.emit("error", { message: "Friend is offline" });
+      return;
     }
+
+    const roomId = `private_${[socket.userId, friendId].sort().join("_")}`;
+    
+    socket.join(roomId);
+    const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+    if (partnerSocket) {
+      partnerSocket.join(roomId);
+    }
+
+    rooms.set(roomId, {
+      users: new Set([socket.userId, friendId]),
+      sockets: new Map([
+        [socket.userId, socket.id],
+        [friendId, partnerSocketId]
+      ])
+    });
+
+    io.to(roomId).emit("matched", { roomId, isPrivate: true });
   });
 
   socket.on("accept_friend_request", async (data) => {
     const { fromUserId } = data;
-    
+    if (!socket.userId) return;
+
     await User.findOneAndUpdate({ userId: socket.userId }, { 
       $addToSet: { friends: fromUserId },
       $pull: { pendingRequests: { from: fromUserId } }
@@ -210,6 +212,18 @@ io.on("connection", (socket) => {
     if (otherUserSocket) {
       io.to(otherUserSocket).emit("friend_added", { userId: socket.userId, isOnline: true });
     }
+  });
+
+  socket.on("delete_message", (data) => {
+    const { roomId, messageId } = data;
+    socket.to(roomId).emit("message_deleted", { messageId });
+  });
+
+  socket.on("exchange_keys", (data) => {
+    const { roomId, publicKey } = data;
+    socket.to(roomId).emit("exchange_keys", { publicKey });
+  });
+
   });
 
   socket.on("typing", (data) => {

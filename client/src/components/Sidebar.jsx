@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [] }) => {
+const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend }) => {
   return (
     <>
       {/* Mobile Overlay */}
@@ -56,7 +56,16 @@ const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, i
               My Friends ({friends.length})
             </div>
             {friends.map((friend, i) => (
-              <div key={i} className="px-3 py-2 hover:bg-[#2f2f2f] rounded-lg flex items-center gap-2 cursor-pointer group transition-colors">
+              <div 
+                key={i} 
+                onClick={() => {
+                  if (friend.isOnline) {
+                    onSelectFriend(friend.userId);
+                    onClose();
+                  }
+                }}
+                className={`px-3 py-2 hover:bg-[#2f2f2f] rounded-lg flex items-center gap-2 cursor-pointer group transition-colors ${!friend.isOnline && 'opacity-50 cursor-not-allowed'}`}
+              >
                 <div className={`w-2 h-2 rounded-full ${friend.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-600'}`} />
                 <UserRound className={`w-4 h-4 ${friend.isOnline ? 'text-gray-300' : 'text-gray-600'} group-hover:text-white`} />
                 <span className={`text-[13px] ${friend.isOnline ? 'text-gray-200' : 'text-gray-500'} truncate group-hover:text-white`}>
