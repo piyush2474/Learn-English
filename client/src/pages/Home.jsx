@@ -34,6 +34,7 @@ const Home = () => {
   const audioContext = useRef(null);
   const analyser = useRef(null);
   const animationFrame = useRef(null);
+  const fileInputRef = useRef(null);
   // ----------------------
 
   // Persistent User ID
@@ -109,6 +110,11 @@ const Home = () => {
     socket.on('receive_message', (data) => {
       setMessages((prev) => [...prev, data]);
       setIsPartnerTyping(false);
+    });
+
+    socket.on('message_deleted', (data) => {
+      const { messageId } = data;
+      setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
     });
 
     socket.on('typing', (data) => {
@@ -391,10 +397,13 @@ const Home = () => {
     e.preventDefault();
     if (!inputText.trim() || !roomId) return;
 
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const messageData = {
       message: inputText,
       roomId,
       senderId: socket.id,
+      type: 'text',
+      messageId,
       timestamp: new Date().toISOString()
     };
 
@@ -402,6 +411,41 @@ const Home = () => {
     setMessages((prev) => [...prev, messageData]);
     setInputText('');
     socket.emit('typing', { roomId, isTyping: false });
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || !roomId) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image too large. Please select an image under 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const messageData = {
+        message: reader.result, // Base64 string
+        roomId,
+        senderId: socket.id,
+        type: 'image',
+        messageId,
+        timestamp: new Date().toISOString()
+      };
+
+      socket.emit('send_message', messageData);
+      setMessages((prev) => [...prev, messageData]);
+    };
+    reader.readAsDataURL(file);
+    // Reset input
+    e.target.value = '';
+  };
+
+  const deleteMessage = (messageId) => {
+    if (!roomId) return;
+    socket.emit('delete_message', { roomId, messageId });
+    setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
   };
 
   const handleTyping = (e) => {
@@ -552,6 +596,9 @@ const Home = () => {
         userCount={userCount} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
+        onStartCall={startCall}
+        isCalling={isCalling}
+        callAccepted={callAccepted}
       />
 
       {/* Main Content Area */}
@@ -569,31 +616,13 @@ const Home = () => {
               <span className="font-bold text-white">Learn English</span>
               {status === 'Matched' && (
                 <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                  Live
+                   Live
                 </span>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {status === 'Matched' && !isCalling && !callAccepted && (
-              <>
-                <button 
-                  onClick={() => startCall('audio')}
-                  title="Audio Call"
-                  className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg transition-colors"
-                >
-                  <Phone className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => startCall('video')}
-                  title="Video Call"
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-lg transition-colors"
-                >
-                  <Video className="w-4 h-4" />
-                </button>
-              </>
-            )}
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
@@ -607,15 +636,31 @@ const Home = () => {
             isPartnerTyping={isPartnerTyping} 
             socketId={socket.id} 
             status={status}
+            onDeleteMessage={deleteMessage}
           />
         </main>
 
         {/* ChatGPT Style Input Area */}
         <footer className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImageUpload} 
+            accept="image/*" 
+            className="hidden" 
+          />
           <form 
             onSubmit={handleSendMessage}
             className="relative flex items-center bg-[#2f2f2f] rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
           >
+            <button
+              type="button"
+              onClick={() => fileInputRef.current.click()}
+              disabled={status !== 'Matched'}
+              className="pl-4 pr-2 text-gray-400 hover:text-white transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
             <textarea
               rows="1"
               value={inputText}

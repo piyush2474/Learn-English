@@ -64,12 +64,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", (data) => {
-    const { message, roomId } = data;
-    socket.to(roomId).emit("receive_message", {
-      message,
-      senderId: socket.id,
-      timestamp: new Date().toISOString()
-    });
+    const { roomId } = data;
+    // Relay the entire data object (includes message, type, messageId, etc.)
+    socket.to(roomId).emit("receive_message", data);
+  });
+
+  socket.on("delete_message", (data) => {
+    const { roomId, messageId } = data;
+    socket.to(roomId).emit("message_deleted", { messageId });
   });
 
   socket.on("typing", (data) => {

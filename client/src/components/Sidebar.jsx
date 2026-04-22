@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, MessageSquare, Globe, LogOut, PanelLeftClose, X } from 'lucide-react';
+import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose }) => {
+const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted }) => {
   return (
     <>
       {/* Mobile Overlay */}
@@ -59,6 +59,32 @@ const Sidebar = ({ status, onNewChat, userCount, isOpen, onClose }) => {
       </div>
 
       <div className="p-3 border-t border-[#2f2f2f] space-y-1">
+        {status === 'Matched' && !isCalling && !callAccepted && (
+          <>
+            <div 
+              onClick={() => {
+                onStartCall('audio');
+                onClose();
+              }}
+              className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors text-green-500"
+            >
+              <UserRound className="w-4 h-4" />
+              <span className="text-[13px] font-medium">Voice Call</span>
+            </div>
+            
+            <div 
+              onClick={() => {
+                onStartCall('video');
+                onClose();
+              }}
+              className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors text-blue-500"
+            >
+              <Tv className="w-4 h-4" />
+              <span className="text-[13px] font-medium">Video Call</span>
+            </div>
+          </>
+        )}
+
         <div className="px-3 py-3 rounded-lg hover:bg-[#2f2f2f] flex items-center gap-3 cursor-pointer transition-colors">
           <Globe className="w-4 h-4 text-gray-400" />
           <div className="flex-1">

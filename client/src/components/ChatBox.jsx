@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 
-const ChatBox = ({ messages, isPartnerTyping, socketId, status }) => {
+const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage }) => {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -42,12 +42,15 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status }) => {
         )}
         
         <div className="flex flex-col w-full">
-          {messages.map((msg, index) => (
+          {messages.map((msg) => (
             <MessageBubble
-              key={index}
+              key={msg.messageId}
               message={msg.message}
               isSelf={msg.senderId === socketId}
               timestamp={msg.timestamp}
+              type={msg.type}
+              messageId={msg.messageId}
+              onDelete={onDeleteMessage}
             />
           ))}
           
