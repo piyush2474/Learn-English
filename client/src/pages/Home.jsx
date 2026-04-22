@@ -400,7 +400,7 @@ const Home = () => {
     sessionStorage.removeItem('current_room_id');
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputText.trim() || !roomId) return;
 
