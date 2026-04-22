@@ -125,11 +125,16 @@ const Home = () => {
       setStatus('Disconnected');
       setMessages((prev) => [
         ...prev,
-        { message: 'Stranger has disconnected.', senderId: 'system', timestamp: new Date().toISOString() }
+        { message: 'Stranger has disconnected. Finding someone new...', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
       setRoomId(null);
       sessionStorage.removeItem('current_room_id');
       endCall();
+
+      // Automatically search for a new partner after 2 seconds
+      setTimeout(() => {
+        findNewPartner();
+      }, 2000);
     });
 
     // --- WebRTC Listeners ---
