@@ -656,7 +656,7 @@ const Home = () => {
   };
 
   return (
-    <div className="h-screen bg-[#212121] flex overflow-hidden font-sans">
+    <div className="h-screen h-[100dvh] bg-[#212121] flex overflow-hidden font-sans relative">
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
@@ -934,7 +934,7 @@ const Home = () => {
 
         {/* ChatGPT Style Input Area */}
         {status !== 'Idle' && (
-          <footer className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
+          <footer className="w-full max-w-3xl mx-auto px-2 sm:px-4 pb-4 sm:pb-6 pt-2 bg-[#212121] z-20">
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -944,13 +944,13 @@ const Home = () => {
             />
             <form 
               onSubmit={handleSendMessage}
-              className="relative flex items-center bg-[#2f2f2f] rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
+              className="relative flex items-center bg-[#2f2f2f] rounded-[24px] sm:rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
             >
               <button
                 type="button"
                 onClick={() => fileInputRef.current.click()}
                 disabled={status !== 'Matched'}
-                className="pl-4 pr-2 text-gray-400 hover:text-white transition-colors"
+                className="pl-3 sm:pl-4 pr-1 sm:pr-2 text-gray-400 hover:text-white transition-colors"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -959,8 +959,8 @@ const Home = () => {
                 value={inputText}
                 onChange={handleTyping}
                 disabled={status !== 'Matched'}
-                placeholder="Message Learn English..."
-                className="w-full bg-transparent text-white px-5 py-4 pr-12 resize-none focus:outline-none min-h-[52px] max-h-48 scrollbar-hide text-[15px]"
+                placeholder="Message..."
+                className="w-full bg-transparent text-white px-3 sm:px-5 py-3 sm:py-4 pr-12 resize-none focus:outline-none min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-48 scrollbar-hide text-[15px]"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -971,7 +971,7 @@ const Home = () => {
               <button
                 type="submit"
                 disabled={status !== 'Matched' || !inputText.trim()}
-                className={`absolute right-2 p-1.5 rounded-xl transition-all ${
+                className={`absolute right-1.5 sm:right-2 p-1.5 rounded-xl transition-all ${
                   inputText.trim() && status === 'Matched' 
                     ? 'bg-white text-black' 
                     : 'bg-[#404040] text-[#171717]'
@@ -980,7 +980,7 @@ const Home = () => {
                 <ArrowUp className="w-5 h-5 stroke-[2.5]" />
               </button>
             </form>
-            <p className="text-[11px] text-center text-gray-500 mt-3 font-medium">
+            <p className="hidden sm:block text-[11px] text-center text-gray-500 mt-3 font-medium">
               Learn English can help you practice conversations in real-time.
             </p>
           </footer>
