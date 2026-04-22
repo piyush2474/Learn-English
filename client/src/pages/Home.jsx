@@ -3,6 +3,7 @@ import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Vo
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
+import { encryptMessage, decryptMessage } from '../utils/crypto';
 
 const Home = () => {
   const [status, setStatus] = useState('Disconnected');
@@ -107,8 +108,9 @@ const Home = () => {
       sessionStorage.setItem('current_room_id', data.roomId);
     });
 
-    socket.on('receive_message', (data) => {
-      setMessages((prev) => [...prev, data]);
+    socket.on('receive_message', async (data) => {
+      const decryptedMessage = await decryptMessage(data.message, data.roomId);
+      setMessages((prev) => [...prev, { ...data, message: decryptedMessage }]);
       setIsPartnerTyping(false);
     });
 
@@ -403,8 +405,10 @@ const Home = () => {
     if (!inputText.trim() || !roomId) return;
 
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const encryptedText = await encryptMessage(inputText, roomId);
+    
     const messageData = {
-      message: inputText,
+      message: encryptedText,
       roomId,
       senderId: socket.id,
       type: 'text',
@@ -413,7 +417,7 @@ const Home = () => {
     };
 
     socket.emit('send_message', messageData);
-    setMessages((prev) => [...prev, messageData]);
+    setMessages((prev) => [...prev, { ...messageData, message: inputText }]);
     setInputText('');
     socket.emit('typing', { roomId, isTyping: false });
   };
@@ -428,10 +432,13 @@ const Home = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const base64Image = reader.result;
+      const encryptedImage = await encryptMessage(base64Image, roomId);
+
       const messageData = {
-        message: reader.result, // Base64 string
+        message: encryptedImage,
         roomId,
         senderId: socket.id,
         type: 'image',
@@ -440,7 +447,7 @@ const Home = () => {
       };
 
       socket.emit('send_message', messageData);
-      setMessages((prev) => [...prev, messageData]);
+      setMessages((prev) => [...prev, { ...messageData, message: base64Image }]);
     };
     reader.readAsDataURL(file);
     // Reset input
