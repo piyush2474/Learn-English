@@ -140,6 +140,8 @@ const Home = () => {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.stunprotocol.org' },
+    { urls: 'stun:stun.sipgate.net:10000' },
     { urls: 'stun:global.stun.twilio.com:3478' }
   ];
 
@@ -427,6 +429,13 @@ const Home = () => {
       iceCandidatePoolSize: 10 
     });
 
+    pc.oniceconnectionstatechange = () => {
+      console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.warn("WebRTC: Connection stalled. You might need a TURN server for this network.");
+      }
+    };
+
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit('ice_candidate', { roomId, candidate: event.candidate });
@@ -493,7 +502,10 @@ const Home = () => {
       startAudioAnalysis(stream);
 
       const pc = createPeerConnection(roomId, type);
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: type === 'video'
+      });
       await pc.setLocalDescription(offer);
 
       socket.emit('call_user', { roomId, signalData: offer, type });
@@ -534,7 +546,10 @@ const Home = () => {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       }
 
-      const answer = await pc.createAnswer();
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: type === 'video'
+      });
       await pc.setLocalDescription(answer);
 
       socket.emit('answer_call', { roomId, signalData: answer });
