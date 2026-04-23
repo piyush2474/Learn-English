@@ -37,11 +37,15 @@ const Home = () => {
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const sharedKeyRef = useRef(null);
+  const myKeyPairRef = useRef(null);
+  const roomIdRef = useRef(null);
 
-  // Sync ref with state
+  // Sync refs with state
   useEffect(() => {
     sharedKeyRef.current = sharedKey;
-  }, [sharedKey]);
+    myKeyPairRef.current = myKeyPair;
+    roomIdRef.current = roomId;
+  }, [sharedKey, myKeyPair, roomId]);
 
   // --- Calling States ---
   const [isCalling, setIsCalling] = useState(false);
@@ -173,13 +177,19 @@ const Home = () => {
     socket.on('rejoined', async (data) => {
       setStatus('Matched');
       setRoomId(data.roomId);
+      roomIdRef.current = data.roomId;
+      
       const savedKey = sessionStorage.getItem(`shared_key_${data.roomId}`);
       if (savedKey) {
         try {
           const key = await importSharedKey(savedKey);
           setSharedKey(key);
+          sharedKeyRef.current = key;
         } catch (e) { console.error("Failed to restore shared key", e); }
       }
+      
+      // Mark seen
+      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: id });
     });
 
     socket.on('partner_rejoined', async () => {
@@ -257,7 +267,7 @@ const Home = () => {
         const decryptedHistory = await Promise.all(history.map(async (msg) => {
           try {
             const key = await importSharedKey(storedKey);
-            const decrypted = await decryptWithKey(key, msg.message);
+            const decrypted = await decryptWithKey(msg.message, key);
             return { ...msg, message: decrypted };
           } catch (e) {
             return { ...msg, message: "[Encrypted Message]" };
@@ -278,7 +288,7 @@ const Home = () => {
       let displayMessage = data.message;
       if (sharedKeyRef.current) {
         try {
-          displayMessage = await decryptWithKey(sharedKeyRef.current, data.message);
+          displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
         } catch (e) {
           console.error("Decryption failed:", e);
         }
