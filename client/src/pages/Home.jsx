@@ -61,6 +61,14 @@ const Home = () => {
   const remoteAudioRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const localVideoRef = useRef(null);
+  const vcChatRef = useRef(null);
+
+  // Auto-scroll VC chat
+  useEffect(() => {
+    if (vcChatRef.current) {
+      vcChatRef.current.scrollTop = vcChatRef.current.scrollHeight;
+    }
+  }, [messages, isVideoCall]);
   const iceCandidatesQueue = useRef([]);
   const audioContext = useRef(null);
   const analyser = useRef(null);
@@ -405,25 +413,26 @@ const Home = () => {
     };
 
     pc.ontrack = (event) => {
-      console.log("Remote track received:", event.track.kind);
+      console.log("WebRTC: Remote track received", event.track.kind);
       const stream = event.streams[0];
       
-      if (type === 'video') {
-        if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
+      if (type === 'video' || event.track.kind === 'video') {
+        if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = stream;
+          remoteVideoRef.current.onloadedmetadata = () => {
+            remoteVideoRef.current.play().catch(e => console.error("WebRTC: Video play failed", e));
+          };
         }
       }
       
-      // Always handle audio for both audio and video calls
-      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+      if (event.track.kind === 'audio' || type === 'audio') {
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = stream;
+          remoteAudioRef.current.onloadedmetadata = () => {
+            remoteAudioRef.current.play().catch(e => console.error("WebRTC: Audio play failed", e));
+          };
+        }
       }
-
-      // Explicitly play both
-      if (remoteVideoRef.current) remoteVideoRef.current.play().catch(e => console.error("Video play error:", e));
-      if (remoteAudioRef.current) remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
     };
 
     if (localStream.current) {
@@ -757,15 +766,18 @@ const Home = () => {
             
             {/* Live Chat Overlay (on top of videos) */}
             <div className="absolute inset-x-0 bottom-[80px] top-0 pointer-events-none flex flex-col justify-end px-4 py-6">
-              <div className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide">
+              <div 
+                ref={vcChatRef}
+                className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide"
+              >
                 {messages.slice(-6).map((msg) => {
                   const isMe = msg.senderId === socket.id;
                   return (
                     <div key={msg.messageId} className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
                       <div className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-xl border flex flex-col gap-0.5 ${
                         isMe 
-                          ? 'bg-blue-600/40 border-blue-500/40 text-white shadow-[0_4px_12px_rgba(37,99,235,0.2)]' 
-                          : 'bg-black/60 border-white/20 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
+                          ? 'bg-[#10a37f]/40 border-[#10a37f]/40 text-white shadow-[0_4px_12px_rgba(16,163,127,0.2)]' 
+                          : 'bg-[#2f2f2f]/60 border-white/10 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
                       }`}>
                         <span className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
                           {isMe ? 'You' : partnerName}
