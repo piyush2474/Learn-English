@@ -110,11 +110,7 @@ const Home = () => {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:stun.services.mozilla.com' },
-    { urls: 'stun:stun.ekiga.net' },
-    { urls: 'stun:stun.ideasip.com' },
-    { urls: 'stun:stun.rixtelecom.se' },
-    { urls: 'stun:stun.schlund.de' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
   ];
 
   useEffect(() => {
@@ -392,7 +388,10 @@ const Home = () => {
   };
 
   const createPeerConnection = (roomId, type) => {
-    const pc = new RTCPeerConnection({ iceServers });
+    const pc = new RTCPeerConnection({ 
+      iceServers,
+      iceCandidatePoolSize: 10 
+    });
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -401,20 +400,25 @@ const Home = () => {
     };
 
     pc.ontrack = (event) => {
-      console.log("Remote track received:", event.streams[0]);
+      console.log("Remote track received:", event.track.kind);
+      const stream = event.streams[0];
+      
       if (type === 'video') {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = event.streams[0];
-          remoteVideoRef.current.play().catch(e => console.error("Video play error:", e));
-        }
-      } else {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-          remoteAudioRef.current.muted = false;
-          remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
-          remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
+        if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
+          remoteVideoRef.current.srcObject = stream;
         }
       }
+      
+      // Always handle audio for both audio and video calls
+      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+      }
+
+      // Explicitly play both
+      if (remoteVideoRef.current) remoteVideoRef.current.play().catch(e => console.error("Video play error:", e));
+      if (remoteAudioRef.current) remoteAudioRef.current.play().catch(e => console.error("Audio play error:", e));
     };
 
     if (localStream.current) {
@@ -705,17 +709,34 @@ const Home = () => {
 
       {/* Video Call Overlay */}
       {isVideoCall && (
-        <div className="fixed inset-0 z-[150] bg-black flex flex-col items-center justify-center">
-          {/* Remote Video (Partner) */}
-          <video 
-            ref={remoteVideoRef} 
-            autoPlay 
-            playsInline 
-            className="w-full h-full object-cover"
-          />
-          
-          {/* Local Video (Self - PIP) */}
-          <div className="absolute top-6 right-6 w-32 sm:w-48 aspect-[3/4] bg-[#1a1a1a] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-[150] bg-black flex flex-col animate-in fade-in duration-500 overflow-hidden">
+          {/* Top Half: Partner Video / Connecting State */}
+          <div className="relative flex-1 bg-[#171717] border-b border-white/5 overflow-hidden">
+            {!callAccepted ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-4">
+                <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">Connecting Video</h3>
+                  <p className="text-sm text-gray-400">Establishing secure connection...</p>
+                </div>
+              </div>
+            ) : (
+              <video 
+                ref={remoteVideoRef} 
+                autoPlay 
+                playsInline 
+                className="w-full h-full object-cover"
+              />
+            )}
+            {/* Overlay Info (Top Left) */}
+            <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[12px] font-medium text-white">Stranger</span>
+            </div>
+          </div>
+
+          {/* Bottom Half: Self Video */}
+          <div className="relative flex-1 bg-[#1a1a1a] overflow-hidden">
             <video 
               ref={localVideoRef} 
               autoPlay 
@@ -725,40 +746,73 @@ const Home = () => {
             />
             {isCameraOff && (
               <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
-                <VideoOff className="w-8 h-8 text-gray-500" />
+                <VideoOff className="w-10 h-10 text-gray-500" />
               </div>
             )}
+            
+            {/* Live Chat Overlay (on top of videos) */}
+            <div className="absolute inset-x-0 bottom-[80px] top-0 pointer-events-none flex flex-col justify-end px-4 py-6">
+              <div className="max-h-[200px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide mask-fade-top">
+                {messages.slice(-5).map((msg) => (
+                  <div key={msg.messageId} className={`flex ${msg.senderId === socket.id ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                    <div className={`max-w-[80%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-md border ${
+                      msg.senderId === socket.id 
+                        ? 'bg-blue-600/30 border-blue-500/30 text-white' 
+                        : 'bg-black/40 border-white/10 text-gray-200'
+                    }`}>
+                      {msg.message}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Side Floating Controls */}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20">
+              <button 
+                onClick={toggleMic}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${isMicMuted ? 'bg-red-500 text-white' : 'bg-black/40 hover:bg-black/60 text-white border border-white/10'}`}
+              >
+                {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+              
+              <button 
+                onClick={toggleCamera}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${isCameraOff ? 'bg-red-500 text-white' : 'bg-black/40 hover:bg-black/60 text-white border border-white/10'}`}
+              >
+                {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              </button>
+
+              <button 
+                onClick={switchCamera}
+                className="w-12 h-12 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center shadow-lg border border-white/10 transition-all md:hidden"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+
+              <button 
+                onClick={endCall}
+                className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
-          {/* Video Controls Footer */}
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/40 backdrop-blur-xl px-8 py-4 rounded-3xl border border-white/10">
-            <button 
-              onClick={toggleMic}
-              className={`p-4 rounded-2xl transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-            >
-              {isMicMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-            </button>
-            
-            <button 
-              onClick={toggleCamera}
-              className={`p-4 rounded-2xl transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-            >
-              {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-            </button>
-
-            <button 
-              onClick={switchCamera}
-              className="p-4 bg-white/10 text-white hover:bg-white/20 rounded-2xl transition-all md:hidden"
-            >
-              <RefreshCw className="w-6 h-6" />
-            </button>
-
-            <button 
-              onClick={endCall}
-              className="p-4 bg-red-500 text-white hover:bg-red-600 rounded-2xl transition-all"
-            >
-              <PhoneOff className="w-6 h-6 rotate-[135deg]" />
-            </button>
+          {/* Integrated Chat Input at bottom */}
+          <div className="bg-[#171717] p-3 border-t border-white/5 flex items-center gap-3">
+            <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/10">
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                className="flex-1 bg-transparent border-none outline-none text-white text-[14px]"
+              />
+              <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors">
+                <ArrowUp className="w-4 h-4 text-white" />
+              </button>
+            </form>
           </div>
         </div>
       )}
