@@ -26,7 +26,8 @@ const messageSchema = new mongoose.Schema({
   },
   timestamp: { 
     type: Date, 
-    default: Date.now 
+    default: Date.now,
+    index: { expires: '24h' } // Automatically delete messages after 24 hours
   }
 }, { timestamps: true });
 

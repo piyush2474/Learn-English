@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2, Info } from 'lucide-react';
+import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2, Info, Settings } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform }) => {
+const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform, onOpenSettings }) => {
   
   const formatLastSeen = (date) => {
     if (!date) return 'Offline';
@@ -165,6 +165,14 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
         )}
 
         <div className="flex flex-col gap-1">
+          <div 
+            onClick={() => { onOpenSettings(); onClose(); }}
+            className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
+          >
+            <Settings className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
+            <span className="text-[13px] text-gray-400 group-hover:text-gray-200">Profile Settings</span>
+          </div>
+
           <div 
             onClick={() => { onInform(); onClose(); }}
             className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"

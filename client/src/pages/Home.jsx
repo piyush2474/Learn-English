@@ -318,6 +318,10 @@ const Home = () => {
       setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
     });
 
+    socket.on('chat_cleared', () => {
+      setMessages([]);
+    });
+
     socket.on('typing', (data) => {
       setIsPartnerTyping(data.isTyping);
     });
@@ -793,6 +797,14 @@ const Home = () => {
     setMessages([]);
   };
 
+  const clearChat = () => {
+    if (!roomId) return;
+    if (window.confirm("Are you sure you want to delete ALL messages in this chat? This cannot be undone.")) {
+      socket.emit("clear_chat", { roomId });
+      setMessages([]);
+    }
+  };
+
   const updateProfile = () => {
     if (!nameInput.trim()) return;
     socket.emit("update_profile", { name: nameInput });
@@ -1006,21 +1018,22 @@ const Home = () => {
       )}
 
       {/* ChatGPT Sidebar */}
-      <Sidebar 
-        status={status} 
-        onNewChat={findNewPartner} 
-        onEndSession={endSession}
-        userCount={userCount} 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        onStartCall={startCall}
-        isCalling={isCalling}
-        callAccepted={callAccepted}
-        friends={friends}
-        onSelectFriend={startPrivateChat}
-        onRemoveFriend={removeFriend}
-        onInform={() => setIsInformModalOpen(true)}
-      />
+        <Sidebar 
+          status={status} 
+          onNewChat={findNewPartner} 
+          onEndSession={endSession}
+          userCount={userCount} 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          onStartCall={startCall}
+          isCalling={isCalling}
+          callAccepted={callAccepted}
+          friends={friends}
+          onSelectFriend={startPrivateChat}
+          onRemoveFriend={removeFriend}
+          onInform={() => setIsInformModalOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#212121]">
@@ -1060,14 +1073,16 @@ const Home = () => {
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
+            {status === 'Matched' && roomId?.startsWith('private_') && (
+              <button onClick={clearChat} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="Clear Chat History">
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
             {status === 'Matched' && !friends.find(f => f.userId === roomId) && (
               <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
                 <UserPlus className="w-5 h-5" />
               </button>
             )}
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-white/5 rounded-lg text-gray-400" title="Settings">
-              <Settings className="w-5 h-5" />
-            </button>
           </div>
         </header>
 

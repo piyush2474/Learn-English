@@ -291,6 +291,14 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("clear_chat", async (data) => {
+    const { roomId } = data;
+    if (roomId.startsWith('private_')) {
+      await Message.deleteMany({ roomId });
+      io.to(roomId).emit("chat_cleared", { roomId });
+    }
+  });
+
   socket.on("mark_messages_seen", async (data) => {
     const { roomId, userId } = data;
     if (roomId.startsWith('private_')) {
