@@ -180,7 +180,7 @@ const Home = () => {
       setRoomId(data.roomId);
       roomIdRef.current = data.roomId;
       
-      const savedKey = sessionStorage.getItem(`shared_key_${data.roomId}`);
+      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
       if (savedKey) {
         try {
           const key = await importSharedKey(savedKey);
@@ -257,13 +257,13 @@ const Home = () => {
         // Persist key immediately
         if (roomIdRef.current) {
           const exported = await exportSharedKey(shared);
-          sessionStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
+          localStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
         }
       }
     });
 
     socket.on('chat_history', async (history) => {
-      const storedKey = sessionStorage.getItem(`shared_key_${roomIdRef.current}`);
+      const storedKey = localStorage.getItem(`shared_key_${roomIdRef.current}`);
       if (storedKey) {
         const decryptedHistory = await Promise.all(history.map(async (msg) => {
           try {
