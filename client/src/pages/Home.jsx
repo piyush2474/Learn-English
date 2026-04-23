@@ -752,18 +752,24 @@ const Home = () => {
             
             {/* Live Chat Overlay (on top of videos) */}
             <div className="absolute inset-x-0 bottom-[80px] top-0 pointer-events-none flex flex-col justify-end px-4 py-6">
-              <div className="max-h-[200px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide mask-fade-top">
-                {messages.slice(-5).map((msg) => (
-                  <div key={msg.messageId} className={`flex ${msg.senderId === socket.id ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`max-w-[80%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-md border ${
-                      msg.senderId === socket.id 
-                        ? 'bg-blue-600/30 border-blue-500/30 text-white' 
-                        : 'bg-black/40 border-white/10 text-gray-200'
-                    }`}>
-                      {msg.message}
+              <div className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide">
+                {messages.slice(-6).map((msg) => {
+                  const isMe = msg.senderId === socket.id;
+                  return (
+                    <div key={msg.messageId} className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
+                      <div className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-xl border flex flex-col gap-0.5 ${
+                        isMe 
+                          ? 'bg-blue-600/40 border-blue-500/40 text-white shadow-[0_4px_12px_rgba(37,99,235,0.2)]' 
+                          : 'bg-black/60 border-white/20 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
+                      }`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
+                          {isMe ? 'You' : (partnerName || 'Stranger')}
+                        </span>
+                        <span className="leading-tight">{msg.message}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
