@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const https = require("https");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const mongoose = require("mongoose");
@@ -17,6 +18,36 @@ const transporter = nodemailer.createTransport({
   }
 });
 // --------------------------
+
+// --- Telegram Notification Helper ---
+const sendTelegramMessage = (text) => {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const data = JSON.stringify({
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown'
+  });
+
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': data.length
+    }
+  };
+
+  const req = https.request(url, options, (res) => {
+    res.on('data', () => {}); 
+  });
+
+  req.on('error', (e) => console.error("Telegram error:", e));
+  req.write(data);
+  req.end();
+};
 
 const app = express();
 app.use(cors());
@@ -173,7 +204,13 @@ io.on("connection", (socket) => {
     };
 
     try {
+      // Send Email
       await transporter.sendMail(mailOptions);
+      
+      // Send Telegram Notification
+      const telegramText = `📩 *New Feedback/Inform*\n\n*From:* ${senderName || 'Anonymous'}\n*Message:* ${message}`;
+      sendTelegramMessage(telegramText);
+
       socket.emit("inform_sent", { success: true });
     } catch (error) {
       console.error("Email error:", error);
