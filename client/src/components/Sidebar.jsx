@@ -53,7 +53,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
         {friends.length > 0 && (
           <div className="mt-6 space-y-1">
             <div className="text-[11px] font-bold text-gray-500 px-3 py-2 uppercase tracking-wider">
-              My Friends ({friends.length})
+              My English Notes ({friends.length})
             </div>
             {friends.map((friend, i) => (
               <div 

@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
-import { User, Languages, Trash2, X, Maximize2 } from 'lucide-react';
+import { User, Languages, Trash2, X, Maximize2, Download } from 'lucide-react';
 
 const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName }) => {
   const [isZoomed, setIsZoomed] = useState(false);
+
+  const handleDownload = (e) => {
+    e.stopPropagation();
+    const link = document.createElement('a');
+    link.href = message;
+    link.download = `shared_image_${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className={`w-full px-4 py-2 flex ${isSelf ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
@@ -43,6 +53,13 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
                   className="w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105"
                   onClick={() => setIsZoomed(true)}
                 />
+                <button 
+                  onClick={handleDownload}
+                  className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all transform translate-y-2 group-hover/img:translate-y-0"
+                  title="Download Image"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
               </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>
