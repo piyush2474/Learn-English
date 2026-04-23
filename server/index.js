@@ -117,20 +117,36 @@ io.on("connection", (socket) => {
   socket.on("register_user", async (data) => {
     const { userId } = data;
     socket.userId = userId;
-    onlineUsers.set(userId, socket.id);
+    
+    // Store live activity info
     onlineUsers.set(userId, { socketId: socket.id, status: 'available', roomId: null });
-    await User.findOneAndUpdate({ userId }, { isOnline: true });
+    
+    // Ensure user exists in DB and update online status
+    let user = await User.findOne({ userId });
+    if (!user) {
+      user = new User({ 
+        userId, 
+        isOnline: true, 
+        name: 'Stranger',
+        avatarColor: '#' + Math.floor(Math.random()*16777215).toString(16)
+      });
+      await user.save();
+    } else {
+      user.isOnline = true;
+      await user.save();
+    }
+
     broadcastStatusUpdate(userId, true, socket);
     console.log(`User registered: ${userId}`);
 
-    // Initial data fetch
-    const user = await User.findOne({ userId }).populate('friends', 'userId name isOnline lastActive avatarColor');
-    if (user) {
-      const friendsData = user.friends.map(f => {
+    // Initial data fetch with populated friends
+    const populatedUser = await User.findOne({ userId }).populate('friends', 'userId name isOnline lastActive avatarColor');
+    if (populatedUser) {
+      const friendsData = populatedUser.friends.map(f => {
         const liveInfo = onlineUsers.get(f.userId);
         return {
           userId: f.userId,
-          name: f.name,
+          name: f.name || "Stranger",
           isOnline: !!liveInfo,
           activity: liveInfo ? liveInfo.status : 'offline',
           roomId: liveInfo ? liveInfo.roomId : null,
@@ -140,9 +156,9 @@ io.on("connection", (socket) => {
       });
 
       socket.emit("init_data", { 
-        name: user.name || "Stranger",
+        name: populatedUser.name || "Stranger",
         friends: friendsData,
-        pendingRequests: user.pendingRequests 
+        pendingRequests: populatedUser.pendingRequests 
       });
     }
   });
