@@ -29,6 +29,7 @@ const Home = () => {
   const [friendRequests, setFriendRequests] = useState([]);
   const [myUserId, setMyUserId] = useState(null);
   const [myName, setMyName] = useState('Stranger');
+  const [remoteStream, setRemoteStream] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [myKeyPair, setMyKeyPair] = useState(null);
@@ -69,6 +70,26 @@ const Home = () => {
       vcChatRef.current.scrollTop = vcChatRef.current.scrollHeight;
     }
   }, [messages, isVideoCall]);
+
+  // Handle Remote Stream Attachment
+  useEffect(() => {
+    if (remoteStream) {
+      if (isVideoCall && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.play().catch(e => {
+          if (e.name !== 'AbortError') console.error("WebRTC: Video play failed", e);
+        });
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
+        remoteAudioRef.current.play().catch(e => {
+          if (e.name !== 'AbortError') console.error("WebRTC: Audio play failed", e);
+        });
+      }
+    }
+  }, [remoteStream, isVideoCall, isSpeakerMode]);
   const iceCandidatesQueue = useRef([]);
   const audioContext = useRef(null);
   const analyser = useRef(null);
@@ -414,27 +435,7 @@ const Home = () => {
 
     pc.ontrack = (event) => {
       console.log("WebRTC: Remote track received", event.track.kind);
-      const stream = event.streams[0];
-      
-      if (type === 'video' || event.track.kind === 'video') {
-        const videoEl = remoteVideoRef.current;
-        if (videoEl && videoEl.srcObject !== stream) {
-          videoEl.srcObject = stream;
-          videoEl.play().catch(e => {
-            if (e.name !== 'AbortError') console.error("WebRTC: Video play failed", e);
-          });
-        }
-      }
-      
-      if (event.track.kind === 'audio' || type === 'audio') {
-        const audioEl = remoteAudioRef.current;
-        if (audioEl && audioEl.srcObject !== stream) {
-          audioEl.srcObject = stream;
-          audioEl.play().catch(e => {
-             if (e.name !== 'AbortError') console.error("WebRTC: Audio play failed", e);
-          });
-        }
-      }
+      setRemoteStream(event.streams[0]);
     };
 
     if (localStream.current) {
@@ -559,6 +560,7 @@ const Home = () => {
     if (animationFrame.current) {
       cancelAnimationFrame(animationFrame.current);
     }
+    setRemoteStream(null);
     setIsCalling(false);
     setIsReceivingCall(false);
     setCallAccepted(false);
