@@ -417,19 +417,29 @@ const Home = () => {
       const stream = event.streams[0];
       
       if (type === 'video' || event.track.kind === 'video') {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = stream;
-          remoteVideoRef.current.onloadedmetadata = () => {
-            remoteVideoRef.current.play().catch(e => console.error("WebRTC: Video play failed", e));
+        const videoEl = remoteVideoRef.current;
+        if (videoEl) {
+          videoEl.srcObject = stream;
+          videoEl.onloadedmetadata = () => {
+            videoEl.play().catch(e => console.error("WebRTC: Video play failed", e));
           };
+        } else {
+          // If ref is not ready, retry in a bit
+          setTimeout(() => {
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = stream;
+              remoteVideoRef.current.play().catch(e => console.error("WebRTC: Video retry play failed", e));
+            }
+          }, 1000);
         }
       }
       
       if (event.track.kind === 'audio' || type === 'audio') {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = stream;
-          remoteAudioRef.current.onloadedmetadata = () => {
-            remoteAudioRef.current.play().catch(e => console.error("WebRTC: Audio play failed", e));
+        const audioEl = remoteAudioRef.current;
+        if (audioEl) {
+          audioEl.srcObject = stream;
+          audioEl.onloadedmetadata = () => {
+            audioEl.play().catch(e => console.error("WebRTC: Audio play failed", e));
           };
         }
       }
@@ -723,9 +733,9 @@ const Home = () => {
 
       {/* Video Call Overlay */}
       {isVideoCall && (
-        <div className="fixed inset-0 z-[150] bg-black flex flex-col animate-in fade-in duration-500 overflow-hidden">
-          {/* Top Half: Partner Video / Connecting State */}
-          <div className="relative flex-1 bg-[#171717] border-b border-white/5 overflow-hidden">
+        <div className="fixed inset-0 z-[150] bg-black flex flex-col md:flex-row animate-in fade-in duration-500 overflow-hidden">
+          {/* Section: Partner Video / Connecting State */}
+          <div className="relative flex-1 bg-[#171717] border-b md:border-b-0 md:border-r border-white/5 overflow-hidden">
             {!callAccepted ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-4">
                 <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
@@ -749,7 +759,7 @@ const Home = () => {
             </div>
           </div>
 
-          {/* Bottom Half: Self Video */}
+          {/* Section: Self Video */}
           <div className="relative flex-1 bg-[#1a1a1a] overflow-hidden">
             <video 
               ref={localVideoRef} 
