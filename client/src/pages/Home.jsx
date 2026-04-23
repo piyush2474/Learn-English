@@ -9,11 +9,16 @@ import {
   generateKeyPair, 
   exportPublicKey, 
   importPublicKey, 
-  deriveSharedSecret 
+  deriveSharedSecret,
+  exportKeyPair,
+  importKeyPair,
+  exportSharedKey,
+  importSharedKey
 } from '../utils/crypto';
 
 const Home = () => {
   const [status, setStatus] = useState('Idle');
+  const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -70,10 +75,20 @@ const Home = () => {
       localStorage.setItem('chat_user_id', id);
     }
     setMyUserId(id);
-    socket.emit("register_user", { userId: id });
 
     const initKeys = async () => {
+      const savedKeys = localStorage.getItem('chat_key_pair');
+      if (savedKeys) {
+        try {
+          const keys = await importKeyPair(savedKeys);
+          setMyKeyPair(keys);
+          return;
+        } catch (e) { console.error("Failed to import keys", e); }
+      }
+      
       const keys = await generateKeyPair();
+      const exported = await exportKeyPair(keys);
+      localStorage.setItem('chat_key_pair', exported);
       setMyKeyPair(keys);
     };
     initKeys();
@@ -108,24 +123,47 @@ const Home = () => {
     }
 
     socket.on('connect', () => {
+      setIsSocketConnected(true);
+      // Always register user on connect/reconnect
+      const id = localStorage.getItem('chat_user_id');
+      if (id) {
+        socket.emit("register_user", { userId: id });
+      }
+
       const savedRoomId = sessionStorage.getItem('current_room_id');
       if (savedRoomId) {
-        socket.emit('rejoin_chat', { userId: myUserId, roomId: savedRoomId });
+        socket.emit('rejoin_chat', { userId: id, roomId: savedRoomId });
       } else {
         setStatus('Idle');
       }
     });
 
-    socket.on('rejoined', (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
+    socket.on('disconnect', () => {
+      setIsSocketConnected(false);
     });
 
-    socket.on('partner_rejoined', () => {
+    socket.on('rejoined', async (data) => {
+      setStatus('Matched');
+      setRoomId(data.roomId);
+      const savedKey = sessionStorage.getItem(`shared_key_${data.roomId}`);
+      if (savedKey) {
+        try {
+          const key = await importSharedKey(savedKey);
+          setSharedKey(key);
+        } catch (e) { console.error("Failed to restore shared key", e); }
+      }
+    });
+
+    socket.on('partner_rejoined', async () => {
       setMessages((prev) => [
         ...prev,
         { message: 'Partner is back!', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
+      // Re-send our public key in case the partner lost theirs
+      if (myKeyPair) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPair.publicKey);
+        socket.emit('exchange_keys', { roomId: sessionStorage.getItem('current_room_id'), publicKey: pubKeyBase64 });
+      }
     });
 
     socket.on('rejoin_failed', () => {
@@ -170,6 +208,9 @@ const Home = () => {
         const partnerPubKey = await importPublicKey(data.publicKey);
         const derived = await deriveSharedSecret(myKeyPair.privateKey, partnerPubKey);
         setSharedKey(derived);
+        // Persist shared key for refresh protection
+        const exported = await exportSharedKey(derived);
+        sessionStorage.setItem(`shared_key_${data.roomId}`, exported);
       }
     });
 
@@ -514,6 +555,7 @@ const Home = () => {
     if (!myUserId) return;
     endCall();
     socket.emit('leave_chat');
+    if (roomId) sessionStorage.removeItem(`shared_key_${roomId}`);
     socket.emit('find_partner', { userId: myUserId });
     setStatus('Waiting');
     setMessages([]);
@@ -525,6 +567,7 @@ const Home = () => {
   const endSession = () => {
     endCall();
     socket.emit('leave_chat');
+    if (roomId) sessionStorage.removeItem(`shared_key_${roomId}`);
     setStatus('Idle');
     setMessages([]);
     setRoomId(null);
@@ -803,6 +846,15 @@ const Home = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative min-w-0 h-full max-h-full">
+        {!isSocketConnected && (
+          <div className="absolute inset-0 z-[500] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
+              <Globe className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Connection Lost</h2>
+            <p className="text-gray-400 max-w-xs">Attempting to restore your session. Please wait...</p>
+          </div>
+        )}
         {/* Header (Shared for Mobile and Desktop) */}
         <header className="flex items-center justify-between p-4 border-b border-[#2f2f2f] bg-[#212121]">
           <div className="flex items-center gap-3">

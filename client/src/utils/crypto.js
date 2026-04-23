@@ -8,6 +8,19 @@ export const generateKeyPair = async () => {
   );
 };
 
+export const exportKeyPair = async (keyPair) => {
+  const publicKey = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
+  const privateKey = await window.crypto.subtle.exportKey("jwk", keyPair.privateKey);
+  return JSON.stringify({ publicKey, privateKey });
+};
+
+export const importKeyPair = async (jsonString) => {
+  const { publicKey, privateKey } = JSON.parse(jsonString);
+  const pub = await window.crypto.subtle.importKey("jwk", publicKey, { name: "ECDH", namedCurve: "P-256" }, true, []);
+  const priv = await window.crypto.subtle.importKey("jwk", privateKey, { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+  return { publicKey: pub, privateKey: priv };
+};
+
 export const exportPublicKey = async (key) => {
   const exported = await window.crypto.subtle.exportKey("spki", key);
   return window.btoa(String.fromCharCode.apply(null, new Uint8Array(exported)));
@@ -31,7 +44,23 @@ export const deriveSharedSecret = async (privateKey, publicKey) => {
     { name: "ECDH", public: publicKey },
     privateKey,
     { name: "AES-GCM", length: 256 },
-    false,
+    true, // Must be true to export it later
+    ["encrypt", "decrypt"]
+  );
+};
+
+export const exportSharedKey = async (key) => {
+  const exported = await window.crypto.subtle.exportKey("jwk", key);
+  return JSON.stringify(exported);
+};
+
+export const importSharedKey = async (jsonString) => {
+  const jwk = JSON.parse(jsonString);
+  return await window.crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "AES-GCM", length: 256 },
+    true,
     ["encrypt", "decrypt"]
   );
 };

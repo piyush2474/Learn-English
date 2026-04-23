@@ -38,8 +38,8 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"]
   },
-  pingTimeout: 5000,
-  pingInterval: 10000
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 const rooms = new Map(); // Store room state: roomId -> { users: Set(userIds), sockets: Map(userId -> socketId) }
