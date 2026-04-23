@@ -707,7 +707,7 @@ const Home = () => {
     const messageData = {
       message: encryptedText,
       roomId,
-      senderId: socket.id,
+      senderId: myUserId, // Use persistent ID instead of socket.id
       type: 'text',
       messageId,
       timestamp: new Date().toISOString()
@@ -741,7 +741,7 @@ const Home = () => {
       const messageData = {
         message: finalMessage,
         roomId,
-        senderId: socket.id,
+        senderId: myUserId, // Use persistent ID instead of socket.id
         type: 'image',
         messageId,
         timestamp: new Date().toISOString()
@@ -1153,7 +1153,7 @@ const Home = () => {
             <ChatBox 
               messages={messages} 
               isPartnerTyping={isPartnerTyping} 
-              socketId={socket.id} 
+              socketId={myUserId} // Pass myUserId instead of socket.id
               status={status}
               onDeleteMessage={deleteMessage}
               partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
