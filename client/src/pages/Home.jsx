@@ -435,14 +435,31 @@ const Home = () => {
     pc.oniceconnectionstatechange = () => {
       console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        if (iceRestartCount < 3) {
+        if (iceRestartCount < 2) {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
           pc.restartIce();
           iceRestartCount++;
+          // We must re-signaling the new offer for ICE restart to work
+          pc.createOffer({ iceRestart: true }).then(offer => {
+            return pc.setLocalDescription(offer).then(() => {
+              socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
+            });
+          }).catch(e => console.error("ICE Restart signaling failed:", e));
         } else {
           console.warn("WebRTC: Connection failed after retries. A TURN server is required for this network.");
         }
       }
+    };
+
+    pc.onnegotiationneeded = async () => {
+       try {
+         console.log("WebRTC: Negotiation needed...");
+         const offer = await pc.createOffer();
+         await pc.setLocalDescription(offer);
+         socket.emit('call_user', { roomId, signalData: offer, type });
+       } catch (err) {
+         console.error("Negotiation error:", err);
+       }
     };
 
     pc.onicecandidate = (event) => {
