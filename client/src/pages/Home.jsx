@@ -418,29 +418,21 @@ const Home = () => {
       
       if (type === 'video' || event.track.kind === 'video') {
         const videoEl = remoteVideoRef.current;
-        if (videoEl) {
+        if (videoEl && videoEl.srcObject !== stream) {
           videoEl.srcObject = stream;
-          videoEl.onloadedmetadata = () => {
-            videoEl.play().catch(e => console.error("WebRTC: Video play failed", e));
-          };
-        } else {
-          // If ref is not ready, retry in a bit
-          setTimeout(() => {
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = stream;
-              remoteVideoRef.current.play().catch(e => console.error("WebRTC: Video retry play failed", e));
-            }
-          }, 1000);
+          videoEl.play().catch(e => {
+            if (e.name !== 'AbortError') console.error("WebRTC: Video play failed", e);
+          });
         }
       }
       
       if (event.track.kind === 'audio' || type === 'audio') {
         const audioEl = remoteAudioRef.current;
-        if (audioEl) {
+        if (audioEl && audioEl.srcObject !== stream) {
           audioEl.srcObject = stream;
-          audioEl.onloadedmetadata = () => {
-            audioEl.play().catch(e => console.error("WebRTC: Audio play failed", e));
-          };
+          audioEl.play().catch(e => {
+             if (e.name !== 'AbortError') console.error("WebRTC: Audio play failed", e);
+          });
         }
       }
     };
