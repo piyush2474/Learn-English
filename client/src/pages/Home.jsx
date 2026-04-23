@@ -224,6 +224,8 @@ const Home = () => {
         } else {
           setPartnerName('Friend');
         }
+        // Mark seen for private rooms
+        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
       } else {
         setPartnerName('Stranger');
       }
@@ -236,33 +238,68 @@ const Home = () => {
     });
 
     socket.on('exchange_keys', async (data) => {
-      if (myKeyPair && !sharedKeyRef.current) {
+      if (myKeyPairRef.current && data.publicKey) {
         const partnerPubKey = await importPublicKey(data.publicKey);
-        const derived = await deriveSharedSecret(myKeyPair.privateKey, partnerPubKey);
-        setSharedKey(derived);
-        // Persist shared key for refresh protection
-        const exported = await exportSharedKey(derived);
-        sessionStorage.setItem(`shared_key_${data.roomId}`, exported);
+        const shared = await deriveSharedSecret(myKeyPairRef.current.privateKey, partnerPubKey);
+        setSharedKey(shared);
+        
+        // Persist key immediately
+        if (roomIdRef.current) {
+          const exported = await exportSharedKey(shared);
+          sessionStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
+        }
       }
     });
 
-    socket.on('receive_message', async (data) => {
-      let content = data.message;
-      if (sharedKeyRef.current) {
-        content = await decryptWithKey(data.message, sharedKeyRef.current);
+    socket.on('chat_history', async (history) => {
+      const storedKey = sessionStorage.getItem(`shared_key_${roomIdRef.current}`);
+      if (storedKey) {
+        const decryptedHistory = await Promise.all(history.map(async (msg) => {
+          try {
+            const key = await importSharedKey(storedKey);
+            const decrypted = await decryptWithKey(key, msg.message);
+            return { ...msg, message: decrypted };
+          } catch (e) {
+            return { ...msg, message: "[Encrypted Message]" };
+          }
+        }));
+        setMessages(decryptedHistory);
+        socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: myUserId });
+      } else {
+        setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]" })));
       }
-      
-      // If it's an image, convert to Blob URL for privacy
-      if (data.type === 'image' && content.startsWith('data:')) {
+    });
+
+    socket.on('messages_marked_seen', (data) => {
+      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
+    });
+
+    socket.on('receive_message', async (data) => {
+      let displayMessage = data.message;
+      if (sharedKeyRef.current) {
         try {
-          const res = await fetch(content);
+          displayMessage = await decryptWithKey(sharedKeyRef.current, data.message);
+        } catch (e) {
+          console.error("Decryption failed:", e);
+        }
+      }
+
+      // If it's an image, convert to Blob URL for privacy
+      if (data.type === 'image' && displayMessage.startsWith('data:')) {
+        try {
+          const res = await fetch(displayMessage);
           const blob = await res.blob();
-          content = URL.createObjectURL(blob);
+          displayMessage = URL.createObjectURL(blob);
         } catch (e) { console.error("Blob conversion failed", e); }
       }
 
-      setMessages((prev) => [...prev, { ...data, message: content }]);
+      setMessages((prev) => [...prev, { ...data, message: displayMessage }]);
       setIsPartnerTyping(false);
+      
+      // Mark as seen if we are in this room
+      if (roomIdRef.current === data.roomId) {
+        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
+      }
     });
 
     socket.on('message_deleted', (data) => {
@@ -278,15 +315,15 @@ const Home = () => {
       setFriends(prev => {
         const exists = prev.find(f => f.userId === data.userId);
         if (exists) return prev;
-        return [...prev, { userId: data.userId, name: data.name, isOnline: data.isOnline }];
+        return [...prev, { 
+          userId: data.userId, 
+          name: data.name, 
+          isOnline: data.isOnline,
+          avatarColor: data.avatarColor,
+          lastActive: data.lastActive
+        }];
       });
       setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
-    });
-
-    socket.on('friend_status_update', (data) => {
-      setFriends(prev => prev.map(f => 
-        f.userId === data.userId ? { ...f, isOnline: data.isOnline } : f
-      ));
     });
 
     socket.on('incoming_friend_request', (data) => {

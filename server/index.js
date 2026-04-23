@@ -5,6 +5,7 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const User = require("./models/User");
+const Message = require("./models/Message");
 const { handleMatchmaking, removeFromQueue } = require("./socket/matchmaking");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
@@ -249,6 +250,13 @@ io.on("connection", (socket) => {
       socket.emit("rejoined", { roomId });
       socket.to(roomId).emit("partner_rejoined");
       console.log(`User ${userId} rejoined room ${roomId}`);
+
+      // Fetch and send chat history for private rooms
+      if (roomId.startsWith('private_')) {
+        Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
+          socket.emit("chat_history", history);
+        });
+      }
     } else {
       socket.emit("rejoin_failed");
     }
@@ -260,10 +268,38 @@ io.on("connection", (socket) => {
     handleMatchmaking(io, socket, rooms);
   });
 
-  socket.on("send_message", (data) => {
-    const { roomId } = data;
-    // Relay the entire data object (includes message, type, messageId, etc.)
+  socket.on("send_message", async (data) => {
+    const { roomId, message, type, messageId, senderId } = data;
+    
+    // Relay message instantly
     socket.to(roomId).emit("receive_message", data);
+
+    // Persist if it's a private room (friends)
+    if (roomId.startsWith('private_')) {
+      try {
+        await new Message({
+          roomId,
+          senderId,
+          message,
+          type: type || 'text',
+          status: 'sent',
+          timestamp: new Date()
+        }).save();
+      } catch (e) {
+        console.error("Failed to save message:", e);
+      }
+    }
+  });
+
+  socket.on("mark_messages_seen", async (data) => {
+    const { roomId, userId } = data;
+    if (roomId.startsWith('private_')) {
+      await Message.updateMany(
+        { roomId, senderId: { $ne: userId }, status: 'sent' },
+        { status: 'seen' }
+      );
+      socket.to(roomId).emit("messages_marked_seen", { roomId });
+    }
   });
 
   socket.on("start_private_chat", async (data) => {
@@ -293,6 +329,11 @@ io.on("connection", (socket) => {
     });
 
     io.to(roomId).emit("matched", { roomId, isPrivate: true });
+
+    // Send history for private rooms
+    Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
+      io.to(roomId).emit("chat_history", history);
+    });
   });
 
 

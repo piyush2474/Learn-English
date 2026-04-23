@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, Languages, Trash2, X, Maximize2, Download } from 'lucide-react';
+import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck } from 'lucide-react';
 
-const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName }) => {
+const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status }) => {
   const [isZoomed, setIsZoomed] = useState(false);
 
   const handleDownload = (e) => {
@@ -71,6 +71,15 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
             <span className="text-[10px] font-medium">
               {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
+            {isSelf && (
+              <span className="ml-1">
+                {status === 'seen' ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 text-white/40" />
+                )}
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -36,6 +36,7 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
               type={msg.type}
               messageId={msg.messageId}
               onDelete={onDeleteMessage}
+              status={msg.status}
             />
           ))}
           
