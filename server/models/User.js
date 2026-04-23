@@ -21,6 +21,17 @@ const userSchema = new mongoose.Schema({
   lastActive: { 
     type: Date, 
     default: Date.now 
+  },
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
+  avatarColor: {
+    type: String,
+    default: () => {
+      const colors = ['#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
   }
 }, { timestamps: true });
 

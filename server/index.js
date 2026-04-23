@@ -95,6 +95,10 @@ io.on("connection", (socket) => {
     if (!user) {
       user = new User({ userId });
       await user.save();
+    } else {
+      // Update online status in DB
+      user.isOnline = true;
+      await user.save();
     }
     
     // Fetch friends and their online status
@@ -102,7 +106,9 @@ io.on("connection", (socket) => {
     const friendsList = friendData.map(f => ({
       userId: f.userId,
       name: f.name || "Stranger",
-      isOnline: onlineUsers.has(f.userId)
+      isOnline: f.isOnline,
+      lastActive: f.lastActive,
+      avatarColor: f.avatarColor
     }));
 
     socket.emit("init_data", { 
@@ -115,7 +121,11 @@ io.on("connection", (socket) => {
     user.friends.forEach(fId => {
       const fSocket = onlineUsers.get(fId);
       if (fSocket) {
-        io.to(fSocket).emit("friend_status_update", { userId, isOnline: true });
+        io.to(fSocket).emit("friend_status_update", { 
+          userId, 
+          isOnline: true,
+          lastActive: null 
+        });
       }
     });
   });
@@ -343,6 +353,30 @@ io.on("connection", (socket) => {
       }, 15000); // 15 seconds grace period
       
       disconnectTimeouts.set(roomId, timeoutId);
+    }
+
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      // Update DB status
+      User.findOneAndUpdate(
+        { userId: socket.userId }, 
+        { isOnline: false, lastActive: new Date() },
+        { new: true }
+      ).then(user => {
+        if (user) {
+          // Notify friends
+          user.friends.forEach(fId => {
+            const fSocket = onlineUsers.get(fId);
+            if (fSocket) {
+              io.to(fSocket).emit("friend_status_update", { 
+                userId: socket.userId, 
+                isOnline: false,
+                lastActive: user.lastActive
+              });
+            }
+          });
+        }
+      });
     }
     
     removeFromQueue(socket.id);

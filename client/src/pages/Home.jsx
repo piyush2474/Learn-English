@@ -304,6 +304,14 @@ const Home = () => {
       setFriendRequests(data.pendingRequests || []);
     });
 
+    socket.on('friend_status_update', (data) => {
+      setFriends(prev => prev.map(f => 
+        f.userId === data.userId 
+          ? { ...f, isOnline: data.isOnline, lastActive: data.lastActive } 
+          : f
+      ));
+    });
+
     socket.on('profile_updated', (data) => {
       setMyName(data.name);
     });
@@ -762,7 +770,7 @@ const Home = () => {
   };
 
   return (
-    <div className="fixed inset-0 h-screen h-[100dvh] bg-[#212121] flex overflow-hidden font-sans relative">
+    <div className="h-screen w-screen bg-[#212121] flex overflow-hidden font-sans relative">
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
@@ -967,7 +975,7 @@ const Home = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative min-w-0 h-full max-h-full">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#212121]">
         {!isSocketConnected && (
           <div className="absolute inset-0 z-[500] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
@@ -977,8 +985,8 @@ const Home = () => {
             <p className="text-gray-400 max-w-xs">Attempting to restore your session. Please wait...</p>
           </div>
         )}
-        {/* Header (Shared for Mobile and Desktop) */}
-        <header className="flex items-center justify-between p-4 border-b border-[#2f2f2f] bg-[#212121]">
+        {/* Header (Fixed height) */}
+        <header className="h-16 shrink-0 flex items-center justify-between px-6 border-b border-white/5 bg-[#212121] z-30">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -1015,8 +1023,8 @@ const Home = () => {
           </div>
         </header>
 
-        {/* Chat Interface */}
-        <main className="flex-1 flex flex-col min-h-0 bg-[#212121] relative">
+        {/* Chat Interface (Scrollable zone) */}
+        <main className="flex-1 overflow-hidden relative flex flex-col">
           {/* Friend Request Toast */}
           {friendRequests.length > 0 && (
             <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300">
@@ -1106,9 +1114,9 @@ const Home = () => {
           )}
         </main>
 
-        {/* ChatGPT Style Input Area */}
+        {/* Input Area (Fixed height at bottom) */}
         {status !== 'Idle' && (
-          <footer className="w-full max-w-3xl mx-auto px-2 sm:px-4 pb-4 sm:pb-6 pt-2 bg-[#212121] z-20 shrink-0">
+          <footer className="shrink-0 w-full max-w-3xl mx-auto px-4 pb-6 pt-2 z-20">
             <input 
               type="file" 
               ref={fileInputRef} 
