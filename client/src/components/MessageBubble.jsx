@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck } from 'lucide-react';
 
-const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status }) => {
+const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status, onZoom }) => {
   const [isZoomed, setIsZoomed] = useState(false);
 
   const handleDownload = (e) => {
@@ -51,7 +51,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
                   src={message} 
                   alt="shared" 
                   className="w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105"
-                  onClick={() => setIsZoomed(true)}
+                  onClick={() => onZoom(message)}
                 />
                 <button 
                   onClick={handleDownload}
@@ -84,19 +84,6 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
         </div>
       </div>
 
-      {/* Full Screen Image Modal */}
-      {isZoomed && (
-        <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsZoomed(false)}>
-          <button className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors">
-            <X className="w-8 h-8" />
-          </button>
-          <img 
-            src={message} 
-            alt="zoomed" 
-            className="max-w-full max-h-full rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
-          />
-        </div>
-      )}
     </div>
   );
 };

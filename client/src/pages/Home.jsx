@@ -61,6 +61,7 @@ const Home = () => {
   const [isInformModalOpen, setIsInformModalOpen] = useState(false);
   const [informMessage, setInformMessage] = useState('');
   const [isSendingInform, setIsSendingInform] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -1157,6 +1158,7 @@ const Home = () => {
               status={status}
               onDeleteMessage={deleteMessage}
               partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
+              onZoomImage={setZoomedImage}
             />
           )}
         </main>
@@ -1289,6 +1291,57 @@ const Home = () => {
                 {isSendingInform ? 'Sending...' : 'Send Message'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Full Screen Image Modal - Top Level to avoid stacking context issues */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300"
+          onClick={() => setZoomedImage(null)}
+        >
+          {/* Header for Modal */}
+          <div className="absolute top-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+            <div className="flex flex-col pointer-events-auto">
+              <span className="text-white font-bold text-lg">Image View</span>
+              <span className="text-gray-400 text-xs">Shared via Learn English</span>
+            </div>
+            <div className="flex items-center gap-4 pointer-events-auto">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const link = document.createElement('a');
+                  link.href = zoomedImage;
+                  link.download = `practice_img_${Date.now()}.png`;
+                  link.click();
+                }}
+                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+                title="Download"
+              >
+                <Download className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={() => setZoomedImage(null)}
+                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+              >
+                <CloseIcon className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Image Container */}
+          <div className="w-full h-full flex items-center justify-center p-4">
+            <img 
+              src={zoomedImage} 
+              alt="full-view" 
+              className="max-w-full max-h-[85vh] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 animate-in zoom-in-95 duration-300"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          
+          {/* Hint */}
+          <div className="absolute bottom-10 text-white/40 text-[13px] font-medium tracking-wide">
+            Tap anywhere to close
           </div>
         </div>
       )}
