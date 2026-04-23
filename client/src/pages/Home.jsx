@@ -19,6 +19,7 @@ import {
 const Home = () => {
   const [status, setStatus] = useState('Idle');
   const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
+  const [partnerName, setPartnerName] = useState('Stranger');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -185,11 +186,15 @@ const Home = () => {
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        // Find friend name
-        const friend = friends.find(f => f.userId === data.roomId.replace('private_', '').replace(myUserId, '').replace('_', ''));
+        const otherUserId = data.roomId.replace('private_', '').replace(myUserId, '').replace('_', '');
+        const friend = friends.find(f => f.userId === otherUserId);
         if (friend) {
-          // You could set a partnerName state here if you wanted to display it
+          setPartnerName(friend.name);
+        } else {
+          setPartnerName('Friend');
         }
+      } else {
+        setPartnerName('Stranger');
       }
 
       // Send our public key to the partner
@@ -763,7 +768,7 @@ const Home = () => {
                           : 'bg-black/60 border-white/20 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
                       }`}>
                         <span className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                          {isMe ? 'You' : (partnerName || 'Stranger')}
+                          {isMe ? 'You' : partnerName}
                         </span>
                         <span className="leading-tight">{msg.message}</span>
                       </div>
