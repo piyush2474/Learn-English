@@ -426,13 +426,22 @@ const Home = () => {
   const createPeerConnection = (roomId, type) => {
     const pc = new RTCPeerConnection({ 
       iceServers,
-      iceCandidatePoolSize: 10 
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     });
 
+    let iceRestartCount = 0;
     pc.oniceconnectionstatechange = () => {
       console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        console.warn("WebRTC: Connection stalled. You might need a TURN server for this network.");
+        if (iceRestartCount < 3) {
+          console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
+          pc.restartIce();
+          iceRestartCount++;
+        } else {
+          console.warn("WebRTC: Connection failed after retries. A TURN server is required for this network.");
+        }
       }
     };
 
