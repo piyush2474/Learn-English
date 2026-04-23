@@ -65,15 +65,16 @@ const onlineUsers = new Map(); // userId -> { socketId, status: 'available' | 'b
 
 const broadcastStatusUpdate = async (userId, isOnline, socketOrIo) => {
   try {
-    const user = await User.findOne({ userId }).populate('friends', 'userId');
-    if (user && user.friends) {
+    const user = await User.findOne({ userId });
+    if (user && user.friends && user.friends.length > 0) {
       const liveInfo = onlineUsers.get(userId);
       const activity = isOnline ? (liveInfo?.status || 'available') : 'offline';
       const lastActive = isOnline ? new Date() : user.lastActive;
       const roomId = isOnline ? liveInfo?.roomId : null;
 
-      user.friends.forEach(friend => {
-        const friendEntry = onlineUsers.get(friend.userId);
+      // Manually find all friends who are currently online
+      user.friends.forEach(friendId => {
+        const friendEntry = onlineUsers.get(friendId);
         if (friendEntry && friendEntry.socketId) {
           socketOrIo.to(friendEntry.socketId).emit('friend_status_update', {
             userId,
@@ -139,10 +140,11 @@ io.on("connection", (socket) => {
     broadcastStatusUpdate(userId, true, socket);
     console.log(`User registered: ${userId}`);
 
-    // Initial data fetch with populated friends
-    const populatedUser = await User.findOne({ userId }).populate('friends', 'userId name isOnline lastActive avatarColor');
-    if (populatedUser) {
-      const friendsData = populatedUser.friends.map(f => {
+    // Initial data fetch: Manually fetch friends because they are strings, not ObjectIds
+    const freshUser = await User.findOne({ userId });
+    if (freshUser) {
+      const friendsList = await User.find({ userId: { $in: freshUser.friends } });
+      const friendsData = friendsList.map(f => {
         const liveInfo = onlineUsers.get(f.userId);
         return {
           userId: f.userId,
@@ -156,9 +158,9 @@ io.on("connection", (socket) => {
       });
 
       socket.emit("init_data", { 
-        name: populatedUser.name || "Stranger",
+        name: freshUser.name || "Stranger",
         friends: friendsData,
-        pendingRequests: populatedUser.pendingRequests 
+        pendingRequests: freshUser.pendingRequests 
       });
     }
   });
