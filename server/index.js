@@ -61,7 +61,34 @@ mongoose.connect(MONGODB_URI)
 // --------------------------
 
 const activeUsers = new Set();
-const onlineUsers = new Map(); // userId -> socketId mapping
+const onlineUsers = new Map(); // userId -> { socketId, status: 'available' | 'busy', roomId }
+
+const broadcastStatusUpdate = async (userId, isOnline, socketOrIo) => {
+  try {
+    const user = await User.findOne({ userId }).populate('friends', 'userId');
+    if (user && user.friends) {
+      const liveInfo = onlineUsers.get(userId);
+      const activity = isOnline ? (liveInfo?.status || 'available') : 'offline';
+      const lastActive = isOnline ? new Date() : user.lastActive;
+      const roomId = isOnline ? liveInfo?.roomId : null;
+
+      user.friends.forEach(friend => {
+        const friendEntry = onlineUsers.get(friend.userId);
+        if (friendEntry && friendEntry.socketId) {
+          socketOrIo.to(friendEntry.socketId).emit('friend_status_update', {
+            userId,
+            isOnline,
+            activity,
+            roomId,
+            lastActive
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.error("Status broadcast error:", e);
+  }
+};
 
 const server = http.createServer(app);
 
