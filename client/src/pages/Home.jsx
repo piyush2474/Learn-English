@@ -794,7 +794,7 @@ const Home = () => {
                 onClick={endCall}
                 className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all"
               >
-                <X className="w-6 h-6" />
+                <CloseIcon className="w-6 h-6" />
               </button>
             </div>
           </div>
