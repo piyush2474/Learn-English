@@ -91,44 +91,33 @@ io.on("connection", (socket) => {
     const { userId } = data;
     socket.userId = userId;
     onlineUsers.set(userId, socket.id);
-    
-    let user = await User.findOne({ userId });
-    if (!user) {
-      user = new User({ userId });
-      await user.save();
-    } else {
-      // Update online status in DB
-      user.isOnline = true;
-      await user.save();
+    onlineUsers.set(userId, { socketId: socket.id, status: 'available', roomId: null });
+    await User.findOneAndUpdate({ userId }, { isOnline: true });
+    broadcastStatusUpdate(userId, true, socket);
+    console.log(`User registered: ${userId}`);
+
+    // Initial data fetch
+    const user = await User.findOne({ userId }).populate('friends', 'userId name isOnline lastActive avatarColor');
+    if (user) {
+      const friendsData = user.friends.map(f => {
+        const liveInfo = onlineUsers.get(f.userId);
+        return {
+          userId: f.userId,
+          name: f.name,
+          isOnline: !!liveInfo,
+          activity: liveInfo ? liveInfo.status : 'offline',
+          roomId: liveInfo ? liveInfo.roomId : null,
+          lastActive: f.lastActive,
+          avatarColor: f.avatarColor
+        };
+      });
+
+      socket.emit("init_data", { 
+        name: user.name || "Stranger",
+        friends: friendsData,
+        pendingRequests: user.pendingRequests 
+      });
     }
-    
-    // Fetch friends and their online status
-    const friendData = await User.find({ userId: { $in: user.friends } });
-    const friendsList = friendData.map(f => ({
-      userId: f.userId,
-      name: f.name || "Stranger",
-      isOnline: f.isOnline,
-      lastActive: f.lastActive,
-      avatarColor: f.avatarColor
-    }));
-
-    socket.emit("init_data", { 
-      name: user.name || "Stranger",
-      friends: friendsList,
-      pendingRequests: user.pendingRequests 
-    });
-
-    // Notify friends that this user is now online
-    user.friends.forEach(fId => {
-      const fSocket = onlineUsers.get(fId);
-      if (fSocket) {
-        io.to(fSocket).emit("friend_status_update", { 
-          userId, 
-          isOnline: true,
-          lastActive: null 
-        });
-      }
-    });
   });
 
   socket.on("update_profile", async (data) => {
@@ -180,9 +169,9 @@ io.on("connection", (socket) => {
       isOnline: isOtherOnline 
     });
     
-    const otherUserSocket = onlineUsers.get(fromUserId);
-    if (otherUserSocket) {
-      io.to(otherUserSocket).emit("friend_added", { 
+    const otherUserEntry = onlineUsers.get(fromUserId);
+    if (otherUserEntry) {
+      io.to(otherUserEntry.socketId).emit("friend_added", { 
         userId: socket.userId, 
         name: me.name || "Stranger", 
         isOnline: true 
@@ -197,9 +186,9 @@ io.on("connection", (socket) => {
     await User.findOneAndUpdate({ userId: friendId }, { $pull: { friends: socket.userId } });
 
     socket.emit("friend_removed", { userId: friendId });
-    const friendSocket = onlineUsers.get(friendId);
-    if (friendSocket) {
-      io.to(friendSocket).emit("friend_removed", { userId: socket.userId });
+    const friendEntry = onlineUsers.get(friendId);
+    if (friendEntry) {
+      io.to(friendEntry.socketId).emit("friend_removed", { userId: socket.userId });
     }
   });
   // ------------------------------
@@ -240,6 +229,8 @@ io.on("connection", (socket) => {
       socket.currentRoom = roomId;
       socket.userId = userId;
       room.sockets.set(userId, socket.id);
+      onlineUsers.set(userId, { socketId: socket.id, status: 'busy', roomId });
+      broadcastStatusUpdate(userId, true, socket);
 
       // Cancel any pending disconnect notification
       if (disconnectTimeouts.has(roomId)) {
@@ -314,8 +305,8 @@ io.on("connection", (socket) => {
     const { friendId } = data;
     if (!socket.userId || !friendId) return;
 
-    const partnerSocketId = onlineUsers.get(friendId);
-    if (!partnerSocketId) {
+    const partnerEntry = onlineUsers.get(friendId);
+    if (!partnerEntry) {
       socket.emit("error", { message: "Friend is offline" });
       return;
     }
@@ -323,7 +314,7 @@ io.on("connection", (socket) => {
     const roomId = `private_${[socket.userId, friendId].sort().join("_")}`;
     
     socket.join(roomId);
-    const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+    const partnerSocket = io.sockets.sockets.get(partnerEntry.socketId);
     if (partnerSocket) {
       partnerSocket.join(roomId);
     }
@@ -332,13 +323,18 @@ io.on("connection", (socket) => {
       users: new Set([socket.userId, friendId]),
       sockets: new Map([
         [socket.userId, socket.id],
-        [friendId, partnerSocketId]
+        [friendId, partnerEntry.socketId]
       ])
     });
 
+    onlineUsers.set(socket.userId, { socketId: socket.id, status: 'busy', roomId });
+    onlineUsers.set(friendId, { ...partnerEntry, status: 'busy', roomId });
+
+    broadcastStatusUpdate(socket.userId, true, socket);
+    broadcastStatusUpdate(friendId, true, socket);
+
     io.to(roomId).emit("matched", { roomId, isPrivate: true });
 
-    // Send history for private rooms
     Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
       io.to(roomId).emit("chat_history", history);
     });
@@ -377,55 +373,70 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("call_ended");
   });
 
+  socket.on("matched", (data) => {
+    const { roomId, userId1, userId2 } = data;
+    
+    const info1 = onlineUsers.get(userId1);
+    if (info1) onlineUsers.set(userId1, { ...info1, status: 'busy', roomId });
+    
+    const info2 = onlineUsers.get(userId2);
+    if (info2) onlineUsers.set(userId2, { ...info2, status: 'busy', roomId });
+
+    broadcastStatusUpdate(userId1, true, io);
+    broadcastStatusUpdate(userId2, true, io);
+
+    io.to(roomId).emit("matched", { roomId });
+  });
+
   socket.on("ice_candidate", (data) => {
     const { roomId, candidate } = data;
     socket.to(roomId).emit("ice_candidate", candidate);
   });
   // ----------------------------------
 
-  socket.on("leave_chat", () => {
-    handleUserLeaving(socket);
-  });
+  const handleLeave = async () => {
+    const userEntry = [...onlineUsers.entries()].find(([_, info]) => info.socketId === socket.id);
+    if (userEntry) {
+      const userId = userEntry[0];
+      const info = onlineUsers.get(userId);
+      const roomId = info?.roomId;
 
-  socket.on("disconnect", () => {
+      if (roomId) {
+        socket.leave(roomId);
+        socket.to(roomId).emit("partner_disconnected");
+        
+        // Set user to available
+        onlineUsers.set(userId, { ...info, status: 'available', roomId: null });
+        broadcastStatusUpdate(userId, true, socket);
+
+        // Also set partner to available if they are online
+        const partnerEntry = [...onlineUsers.entries()].find(([_, pInfo]) => pInfo.roomId === roomId && pInfo.socketId !== socket.id);
+        if (partnerEntry) {
+          const pUserId = partnerEntry[0];
+          const pInfo = onlineUsers.get(pUserId);
+          onlineUsers.set(pUserId, { ...pInfo, status: 'available', roomId: null });
+          broadcastStatusUpdate(pUserId, true, socket);
+        }
+      }
+    }
+  };
+
+  socket.on("leave_chat", handleLeave);
+
+  socket.on("disconnect", async () => {
     console.log(`User disconnected: ${socket.id}`);
     activeUsers.delete(socket.id);
     updateUserCount();
     
-    if (socket.currentRoom) {
-      const roomId = socket.currentRoom;
-      // Start a grace period before notifying partner
-      const timeoutId = setTimeout(() => {
-        socket.to(roomId).emit("partner_disconnected");
-        rooms.delete(roomId);
-        disconnectTimeouts.delete(roomId);
-      }, 15000); // 15 seconds grace period
+    const userEntry = [...onlineUsers.entries()].find(([_, info]) => info.socketId === socket.id);
+    if (userEntry) {
+      const userId = userEntry[0];
+      handleLeave(); // Ensure room status is updated
       
-      disconnectTimeouts.set(roomId, timeoutId);
-    }
-
-    if (socket.userId) {
-      onlineUsers.delete(socket.userId);
-      // Update DB status
-      User.findOneAndUpdate(
-        { userId: socket.userId }, 
-        { isOnline: false, lastActive: new Date() },
-        { new: true }
-      ).then(user => {
-        if (user) {
-          // Notify friends
-          user.friends.forEach(fId => {
-            const fSocket = onlineUsers.get(fId);
-            if (fSocket) {
-              io.to(fSocket).emit("friend_status_update", { 
-                userId: socket.userId, 
-                isOnline: false,
-                lastActive: user.lastActive
-              });
-            }
-          });
-        }
-      });
+      onlineUsers.delete(userId);
+      await User.findOneAndUpdate({ userId }, { isOnline: false, lastActive: new Date() });
+      broadcastStatusUpdate(userId, false, socket);
+      console.log(`User disconnected: ${userId}`);
     }
     
     removeFromQueue(socket.id);

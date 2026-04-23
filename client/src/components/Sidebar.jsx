@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2, Info, Settings } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform, onOpenSettings }) => {
+const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform, onOpenSettings, currentRoomId }) => {
   
   const formatLastSeen = (date) => {
     if (!date) return 'Offline';
@@ -98,7 +98,11 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                       {getInitials(friend.name)}
                     </div>
                     {friend.isOnline && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#171717] shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#171717] shadow-lg ${
+                        friend.roomId === currentRoomId ? 'bg-blue-500 shadow-blue-500/50' :
+                        friend.activity === 'busy' ? 'bg-orange-500 shadow-orange-500/50' :
+                        'bg-green-500 shadow-green-500/50'
+                      }`} />
                     )}
                   </div>
 
@@ -110,7 +114,13 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                     </div>
                     <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
                       {friend.isOnline ? (
-                        <span className="text-green-500 font-medium animate-pulse">Online now</span>
+                        friend.roomId === currentRoomId ? (
+                          <span className="text-blue-400 font-bold animate-pulse">Practicing with you</span>
+                        ) : friend.activity === 'busy' ? (
+                          <span className="text-orange-400 font-medium italic">In another conversation</span>
+                        ) : (
+                          <span className="text-green-500 font-medium">Available to Practice</span>
+                        )
                       ) : (
                         <span>Active {formatLastSeen(friend.lastActive)}</span>
                       )}

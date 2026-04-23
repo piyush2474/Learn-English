@@ -359,7 +359,12 @@ const Home = () => {
     socket.on('friend_status_update', (data) => {
       setFriends(prev => prev.map(f => 
         f.userId === data.userId 
-          ? { ...f, isOnline: data.isOnline, lastActive: data.lastActive } 
+          ? { ...f, 
+              isOnline: data.isOnline, 
+              activity: data.activity, 
+              roomId: data.roomId,
+              lastActive: data.lastActive 
+            } 
           : f
       ));
     });
@@ -1033,6 +1038,7 @@ const Home = () => {
           onRemoveFriend={removeFriend}
           onInform={() => setIsInformModalOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          currentRoomId={roomId}
         />
 
       {/* Main Content Area */}
