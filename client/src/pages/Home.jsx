@@ -770,7 +770,7 @@ const Home = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#212121] flex overflow-hidden font-sans relative">
+    <div className="fixed inset-0 w-full h-full h-[100dvh] bg-[#212121] flex overflow-hidden font-sans">
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
@@ -986,7 +986,7 @@ const Home = () => {
           </div>
         )}
         {/* Header (Fixed height) */}
-        <header className="h-16 shrink-0 flex items-center justify-between px-6 border-b border-white/5 bg-[#212121] z-30">
+        <header className="h-[60px] shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#212121] z-30">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
