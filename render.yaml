@@ -2,7 +2,7 @@ services:
   - type: web
     name: learn-english-backend
     env: node
-    plan: free
+    plan: starter
     rootDir: server
     buildCommand: npm install
     startCommand: node index.js
