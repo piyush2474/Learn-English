@@ -1128,14 +1128,14 @@ const Home = () => {
       {isStealthMode && (
         <div className="fixed inset-0 z-[300] bg-[#121212] flex flex-col animate-in fade-in duration-500">
           <div 
-            className="h-14 bg-[#1a1a1a] border-b border-white/5 flex items-center justify-between px-6 shrink-0 cursor-pointer select-none active:bg-white/5"
+            className="h-14 bg-[#0a0a0a] border-b border-white/[0.02] flex items-center justify-between px-6 shrink-0 cursor-pointer select-none"
             onDoubleClick={toggleStealth}
           >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500" />
-              <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">Academic Portal v4.2</span>
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">Academic Portal Access v4.2</span>
             </div>
-            <CloseIcon className="w-4 h-4 text-gray-600 hover:text-white" onClick={toggleStealth} />
+            <CloseIcon className="w-4 h-4 text-gray-700 hover:text-white transition-colors" onClick={toggleStealth} />
           </div>
 
           <LMSDashboard 
