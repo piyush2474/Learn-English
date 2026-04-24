@@ -1213,14 +1213,7 @@ const Home = () => {
 
                   const isAlreadyFriend = friends.some(f => f.userId === partnerId);
 
-                  if (isAlreadyFriend) {
-                    return (
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg ml-1">
-                        <Check className="w-3.5 h-3.5 text-blue-400" />
-                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">Friend</span>
-                      </div>
-                    );
-                  }
+                  if (isAlreadyFriend) return null;
 
                   return (
                     <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
