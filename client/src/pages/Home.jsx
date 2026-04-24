@@ -997,7 +997,18 @@ const Home = () => {
   };
 
   const toggleStealth = () => {
-    setIsStealthMode(prev => !prev);
+    const nextStealth = !isStealthMode;
+    
+    if (nextStealth) {
+      // Panic Clear: Wipe everything immediately for stealth
+      if (roomId) {
+        socket.emit('clear_chat', { roomId });
+        setMessages([]);
+        setSharedKey(null);
+      }
+    }
+    
+    setIsStealthMode(nextStealth);
   };
 
   return (
