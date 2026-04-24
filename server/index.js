@@ -484,6 +484,11 @@ io.on("connection", (socket) => {
 
   socket.on("leave_chat", handleLeave);
 
+  socket.on("uploading_media", (data) => {
+    const { roomId, type } = data;
+    socket.to(roomId).emit("partner_uploading_media", { type });
+  });
+
   socket.on("disconnect", async () => {
     console.log(`User disconnected: ${socket.id}`);
     activeUsers.delete(socket.id);

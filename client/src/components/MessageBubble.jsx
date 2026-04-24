@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck } from 'lucide-react';
 
-const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status, onZoom }) => {
+const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status, onZoom, isUploading }) => {
   const [isZoomed, setIsZoomed] = useState(false);
 
   const handleDownload = (e) => {
@@ -33,7 +33,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
           }
         `}>
           {/* Delete Button for Self Images */}
-          {isSelf && type === 'image' && (
+          {isSelf && type === 'image' && !isUploading && (
             <button 
               onClick={() => onDelete(messageId)}
               className="absolute -top-2 -left-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
@@ -50,16 +50,26 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
                 <img 
                   src={message} 
                   alt="shared" 
-                  className="w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105"
-                  onClick={() => onZoom(message)}
+                  className={`w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105 ${isUploading ? 'blur-md scale-110' : ''}`}
+                  onClick={() => !isUploading && onZoom(message)}
                 />
-                <button 
-                  onClick={handleDownload}
-                  className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all transform translate-y-2 group-hover/img:translate-y-0"
-                  title="Download Image"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
+                
+                {isUploading && (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3">
+                    <div className="w-8 h-8 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                    <span className="text-[10px] font-bold text-white tracking-widest uppercase">Sending...</span>
+                  </div>
+                )}
+
+                {!isUploading && (
+                  <button 
+                    onClick={handleDownload}
+                    className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all transform translate-y-2 group-hover/img:translate-y-0"
+                    title="Download Image"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>

@@ -62,6 +62,7 @@ const Home = () => {
   const [informMessage, setInformMessage] = useState('');
   const [isSendingInform, setIsSendingInform] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [partnerMediaStatus, setPartnerMediaStatus] = useState(null); // 'image' | 'video' | null
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -478,6 +479,11 @@ const Home = () => {
         console.error("Error adding ice candidate:", err);
       }
     });
+
+    socket.on('partner_uploading_media', (data) => {
+      setPartnerMediaStatus(data.type);
+      setTimeout(() => setPartnerMediaStatus(null), 15000); // Auto-clear after 15s
+    });
     // ----------------------
 
     return () => {
@@ -507,6 +513,7 @@ const Home = () => {
       socket.off('messages_marked_seen');
       socket.off('message_deleted');
       socket.off('chat_cleared');
+      socket.off('partner_uploading_media');
       // socket.disconnect(); // REMOVED: Keep connection stable
     };
   }, [myUserId]); 
@@ -820,9 +827,25 @@ const Home = () => {
     const reader = new FileReader();
     reader.onload = async () => {
       const rawBase64 = reader.result;
-      const compressedBase64 = await compressImage(rawBase64);
       
+      // 1. Create a local temporary message (Ghost Preview)
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const localMsg = {
+        message: rawBase64,
+        roomId,
+        senderId: myUserId,
+        type: 'image',
+        messageId,
+        timestamp: new Date().toISOString(),
+        isUploading: true
+      };
+      setMessages((prev) => [...prev, localMsg]);
+
+      // 2. Notify partner
+      socket.emit('uploading_media', { roomId, type: 'image' });
+
+      // 3. Compress and Send
+      const compressedBase64 = await compressImage(rawBase64);
       
       let finalMessage = compressedBase64;
       if (sharedKeyRef.current) {
@@ -840,7 +863,7 @@ const Home = () => {
 
       socket.emit('send_message', messageData);
       
-      // Convert to Blob for local display privacy
+      // 4. Update the local message once done
       let localDisplay = compressedBase64;
       try {
         const res = await fetch(compressedBase64);
@@ -848,7 +871,12 @@ const Home = () => {
         localDisplay = URL.createObjectURL(blob);
       } catch (e) {}
 
-      setMessages((prev) => [...prev, { ...messageData, message: localDisplay, rawContent: finalMessage }]);
+      setMessages((prev) => prev.map(m => 
+        m.messageId === messageId 
+          ? { ...m, message: localDisplay, isUploading: false, rawContent: finalMessage } 
+          : m
+      ));
+      setPartnerMediaStatus(null);
     };
     reader.readAsDataURL(file);
     // Reset input
@@ -1255,15 +1283,25 @@ const Home = () => {
               </button>
             </div>
           ) : (
-            <ChatBox 
-              messages={messages} 
-              isPartnerTyping={isPartnerTyping} 
-              socketId={myUserId} // Pass myUserId instead of socket.id
-              status={status}
-              onDeleteMessage={deleteMessage}
-              partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
-              onZoomImage={setZoomedImage}
-            />
+            <>
+              <ChatBox 
+                messages={messages} 
+                isPartnerTyping={isPartnerTyping} 
+                socketId={myUserId} // Pass myUserId instead of socket.id
+                status={status}
+                onDeleteMessage={deleteMessage}
+                partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
+                onZoomImage={setZoomedImage}
+              />
+              {partnerMediaStatus && (
+                <div className="absolute bottom-24 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                  <span className="text-[11px] font-bold text-white tracking-wider uppercase">
+                    {status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'} is sending {partnerMediaStatus === 'image' ? 'a photo' : 'media'}...
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </main>
 

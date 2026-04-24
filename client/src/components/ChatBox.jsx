@@ -38,6 +38,7 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
               onDelete={onDeleteMessage}
               status={msg.status}
               onZoom={onZoomImage}
+              isUploading={msg.isUploading}
             />
           ))}
           
