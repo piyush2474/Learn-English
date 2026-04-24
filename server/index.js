@@ -300,6 +300,14 @@ io.on("connection", (socket) => {
       }
 
       const partnerUserId = [...room.users].find(id => id !== userId);
+      
+      // Re-sync partner's status as well if they are online
+      const partnerEntry = onlineUsers.get(partnerUserId);
+      if (partnerEntry) {
+        onlineUsers.set(partnerUserId, { ...partnerEntry, status: 'busy', roomId });
+        broadcastStatusUpdate(partnerUserId, true, socket);
+      }
+
       socket.emit("rejoined", { roomId, partnerUserId });
       socket.to(roomId).emit("partner_rejoined");
       console.log(`User ${userId} rejoined room ${roomId}`);

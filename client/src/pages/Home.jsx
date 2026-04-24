@@ -228,12 +228,21 @@ const Home = () => {
     });
 
     socket.on('partner_rejoined', async () => {
+      // Restore state when partner returns
+      setStatus('Matched');
+      const savedRoomId = sessionStorage.getItem('current_room_id');
+      if (savedRoomId) {
+        setRoomId(savedRoomId);
+        roomIdRef.current = savedRoomId;
+      }
+
       setMessages((prev) => [
         ...prev,
         { message: 'Partner is back!', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
+      
       // Re-send our public key in case the partner lost theirs
-      if (myKeyPairRef.current) {
+      if (myKeyPairRef.current && sessionStorage.getItem('current_room_id')) {
         const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
         socket.emit('exchange_keys', { roomId: sessionStorage.getItem('current_room_id'), publicKey: pubKeyBase64 });
       }
@@ -436,11 +445,9 @@ const Home = () => {
       setStatus('Disconnected');
       setMessages((prev) => [
         ...prev,
-        { message: 'Stranger has disconnected.', senderId: 'system', timestamp: new Date().toISOString() }
+        { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
-      setRoomId(null);
-      setSharedKey(null); // Reset encryption
-      sessionStorage.removeItem('current_room_id');
+      // Keep roomId and sharedKey for potential rejoin
       endCall();
     });
 
@@ -1194,7 +1201,7 @@ const Home = () => {
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
             
-            {status === 'Matched' && roomId && (
+            {(status === 'Matched' || status === 'Disconnected') && roomId && (
               <>
                 {/* Clear Chat (Private Only) */}
                 {roomId.startsWith('private_') && (
