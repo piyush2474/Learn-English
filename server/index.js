@@ -330,7 +330,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", async (data) => {
-    const { roomId, message, type, messageId, senderId } = data;
+    const { roomId, message, type, messageId, senderId, vanishMode } = data;
     
     // Relay message instantly
     socket.to(roomId).emit("receive_message", data);
@@ -338,13 +338,21 @@ io.on("connection", (socket) => {
     // Persist if it's a private room (friends)
     if (roomId.startsWith('private_')) {
       try {
+        let expiresAt = null;
+        if (vanishMode === '1h') {
+          expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        } else if (vanishMode === '24h') {
+          expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
+
         await new Message({
           roomId,
           senderId,
           message,
           type: type || 'text',
           status: 'sent',
-          timestamp: new Date()
+          timestamp: new Date(),
+          expiresAt
         }).save();
       } catch (e) {
         console.error("Failed to save message:", e);

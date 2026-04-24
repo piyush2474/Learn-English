@@ -64,6 +64,8 @@ const Home = () => {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [partnerMediaStatus, setPartnerMediaStatus] = useState(null); // 'image' | 'video' | null
   const [partnerUserId, setPartnerUserId] = useState(null);
+  const [vanishMode, setVanishMode] = useState('off'); // 'off' | '1h' | '24h'
+  const [isStealthMode, setIsStealthMode] = useState(false);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -786,7 +788,8 @@ const Home = () => {
       senderId: myUserId, // Use persistent ID instead of socket.id
       type: 'text',
       messageId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      vanishMode
     };
 
     socket.emit('send_message', messageData);
@@ -868,7 +871,8 @@ const Home = () => {
         senderId: myUserId,
         type: 'image',
         messageId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        vanishMode
       };
 
       socket.emit('send_message', messageData);
@@ -953,6 +957,49 @@ const Home = () => {
     }, 2000);
   };
 
+  // --- Stealth Mode (Panic Button) Component ---
+  const VocabularyStudy = () => (
+    <div className="flex-1 bg-[#171717] overflow-y-auto p-6 animate-in fade-in duration-500">
+      <div className="max-w-2xl mx-auto space-y-8">
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <h2 className="text-2xl font-bold text-white">Daily English Vocabulary</h2>
+          <span className="text-blue-500 font-medium">Lesson 14: Academic Verbs</span>
+        </div>
+        
+        <div className="grid gap-4">
+          {[
+            { word: 'Analyze', type: 'verb', def: 'To examine something in detail.' },
+            { word: 'Interpret', type: 'verb', def: 'To explain the meaning of information.' },
+            { word: 'Evaluate', type: 'verb', def: 'To judge the value or condition of something.' },
+            { word: 'Synthesize', type: 'verb', def: 'To combine elements to form a connected whole.' },
+            { word: 'Hypothesize', type: 'verb', def: 'To suggest a theory or explanation.' },
+            { word: 'Validate', type: 'verb', def: 'To check or prove the accuracy of something.' },
+          ].map((item, i) => (
+            <div key={i} className="bg-[#212121] p-4 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors">
+              <div className="flex items-baseline gap-3 mb-1">
+                <span className="text-lg font-bold text-white">{item.word}</span>
+                <span className="text-xs text-gray-500 italic">({item.type})</span>
+              </div>
+              <p className="text-sm text-gray-400">{item.def}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/20">
+          <h3 className="text-blue-400 font-bold mb-2 uppercase tracking-widest text-[11px]">Grammar Tip</h3>
+          <p className="text-gray-300 text-sm leading-relaxed">
+            When using the verb "Analyze," remember to use it with a direct object. 
+            Example: "We need to analyze the data before making a decision."
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const toggleStealth = () => {
+    setIsStealthMode(prev => !prev);
+  };
+
   return (
     <div className="fixed inset-0 w-full h-full h-[100dvh] bg-[#212121] flex overflow-hidden font-sans">
       {/* Hidden Audio for remote stream */}
@@ -1008,7 +1055,7 @@ const Home = () => {
                 className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide"
               >
                 {messages.slice(-6).map((msg) => {
-                  const isMe = msg.senderId === socket.id;
+                  const isMe = msg.senderId === myUserId;
                   return (
                     <div key={msg.messageId} className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
                       <div className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-xl border flex flex-col gap-0.5 ${
@@ -1017,7 +1064,7 @@ const Home = () => {
                           : 'bg-[#2f2f2f]/60 border-white/10 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
                       }`}>
                         <span className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                          {isMe ? 'You' : partnerName}
+                          {isMe ? 'You' : (friends.find(f => f.userId === roomId)?.name || 'Stranger')}
                         </span>
                         <span className="leading-tight">{msg.message}</span>
                       </div>
@@ -1141,24 +1188,27 @@ const Home = () => {
         </div>
       )}
 
-      {/* ChatGPT Sidebar */}
-        <Sidebar 
-          status={status} 
-          onNewChat={findNewPartner} 
-          onEndSession={endSession}
-          userCount={userCount} 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
-          onStartCall={startCall}
-          isCalling={isCalling}
-          callAccepted={callAccepted}
-          friends={friends}
-          onSelectFriend={startPrivateChat}
-          onRemoveFriend={removeFriend}
-          onInform={() => setIsInformModalOpen(true)}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          currentRoomId={roomId}
-        />
+      {/* Main Container */}
+      <Sidebar 
+        status={status} 
+        onNewChat={findNewPartner} 
+        onEndSession={endSession} 
+        userCount={userCount}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onStartCall={startCall}
+        isCalling={isCalling}
+        callAccepted={callAccepted}
+        friends={friends}
+        onSelectFriend={startPrivateChat}
+        onRemoveFriend={removeFriend}
+        onInform={() => setIsInformModalOpen(true)}
+        onOpenSettings={() => {
+          setNameInput(myName);
+          setIsSettingsOpen(true);
+        }}
+        currentRoomId={roomId}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#212121]">
@@ -1174,7 +1224,10 @@ const Home = () => {
           </div>
         )}
         {/* Header (Fixed height) */}
-        <header className="h-[60px] shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#212121] z-30">
+        <header 
+          onDoubleClick={toggleStealth}
+          className="h-[60px] shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#212121] z-30 cursor-pointer select-none"
+        >
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -1197,8 +1250,32 @@ const Home = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Vanish Mode Toggle (Only in chats) */}
+            {(status === 'Matched' || status === 'Disconnected') && roomId && !isStealthMode && (
+              <div className="flex items-center bg-black/20 rounded-lg p-0.5 mr-2 border border-white/5">
+                {[
+                  { id: 'off', label: '∞', title: 'Normal Mode' },
+                  { id: '1h', label: '1H', title: 'Vanish after 1 Hour' },
+                  { id: '24h', label: '24H', title: 'Vanish after 24 Hours' }
+                ].map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setVanishMode(mode.id)}
+                    className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${
+                      vanishMode === mode.id 
+                        ? 'bg-blue-600 text-white shadow-lg' 
+                        : 'text-gray-500 hover:text-white'
+                    }`}
+                    title={mode.title}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
-              <Plus className="w-5 h-5 text-gray-400" />
+              <Plus className="w-5 h-5" />
             </button>
             
             {(status === 'Matched' || status === 'Disconnected') && roomId && (
@@ -1232,108 +1309,114 @@ const Home = () => {
 
         {/* Chat Interface (Scrollable zone) */}
         <main className="flex-1 overflow-hidden relative flex flex-col">
-          {/* Friend Request Toast */}
-          {friendRequests.length > 0 && (
-            <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                  <UserPlus className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{friendRequests[0].fromName || 'Stranger'}</p>
-                  <p className="text-xs text-gray-400">Wants to be friends!</p>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button 
-                  onClick={() => acceptFriendRequest(friendRequests[0].from)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
-                >
-                  Accept
-                </button>
-                <button 
-                  onClick={() => setFriendRequests(prev => prev.slice(1))}
-                  className="flex-1 bg-[#3d3d3d] hover:bg-[#4d4d4d] text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
-          )}
-
-          {status === 'Idle' ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 animate-in fade-in duration-700">
-              <div className="max-w-md space-y-6">
-                <div className="w-24 h-24 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 transform hover:rotate-12 transition-transform duration-500 shadow-2xl shadow-blue-500/5">
-                  <Globe className="w-12 h-12 text-blue-500" />
-                </div>
-                <h1 className="text-6xl font-extrabold text-white tracking-tighter">Practice <br/><span className="text-blue-500">English</span></h1>
-              </div>
-
-              <button 
-                onClick={findNewPartner}
-                className="group relative flex items-center gap-4 bg-white hover:bg-gray-200 text-black px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-white/5"
-              >
-                <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                  <Plus className="w-5 h-5 text-black" />
-                </div>
-                <span>Start Learning</span>
-              </button>
-
-              <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  <span>{userCount} Learners Online</span>
-                </div>
-                <span>•</span>
-                <span>Secure</span>
-                <span>•</span>
-                <span>Global</span>
-              </div>
-            </div>
-          ) : status === 'Waiting' ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 animate-in zoom-in duration-500">
-              <div className="relative">
-                <div className="w-32 h-32 border-4 border-blue-500/20 rounded-full" />
-                <div className="absolute inset-0 w-32 h-32 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <Globe className="absolute inset-0 m-auto w-12 h-12 text-blue-500 animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-white">Finding a Partner...</h2>
-                <p className="text-gray-400 font-medium">Matching you with someone based on availability.</p>
-              </div>
-              <button 
-                onClick={endSession}
-                className="text-gray-500 hover:text-white text-sm font-medium underline underline-offset-4 transition-colors"
-              >
-                Cancel Search
-              </button>
-            </div>
+          {isStealthMode ? (
+            <VocabularyStudy />
           ) : (
             <>
-              <ChatBox 
-                messages={messages} 
-                isPartnerTyping={isPartnerTyping} 
-                socketId={myUserId} // Pass myUserId instead of socket.id
-                status={status}
-                onDeleteMessage={deleteMessage}
-                partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
-                onZoomImage={setZoomedImage}
-              />
-              {partnerMediaStatus && (
-                <div className="absolute bottom-24 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                  <span className="text-[11px] font-bold text-white tracking-wider uppercase">
-                    {status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'} is sending {partnerMediaStatus === 'image' ? 'a photo' : 'media'}...
-                  </span>
+              {/* Friend Request Toast */}
+              {friendRequests.length > 0 && (
+                <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <UserPlus className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{friendRequests[0].fromName || 'Stranger'}</p>
+                      <p className="text-xs text-gray-400">Wants to be friends!</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button 
+                      onClick={() => acceptFriendRequest(friendRequests[0].from)}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
+                    >
+                      Accept
+                    </button>
+                    <button 
+                      onClick={() => setFriendRequests(prev => prev.slice(1))}
+                      className="flex-1 bg-[#3d3d3d] hover:bg-[#4d4d4d] text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
+              )}
+
+              {status === 'Idle' ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 animate-in fade-in duration-700">
+                  <div className="max-w-md space-y-6">
+                    <div className="w-24 h-24 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 transform hover:rotate-12 transition-transform duration-500 shadow-2xl shadow-blue-500/5">
+                      <Globe className="w-12 h-12 text-blue-500" />
+                    </div>
+                    <h1 className="text-6xl font-extrabold text-white tracking-tighter">Practice <br/><span className="text-blue-500">English</span></h1>
+                  </div>
+
+                  <button 
+                    onClick={findNewPartner}
+                    className="group relative flex items-center gap-4 bg-white hover:bg-gray-200 text-black px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-white/5"
+                  >
+                    <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center group-hover:bg-black/10 transition-colors">
+                      <Plus className="w-5 h-5 text-black" />
+                    </div>
+                    <span>Start Learning</span>
+                  </button>
+
+                  <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      <span>{userCount} Learners Online</span>
+                    </div>
+                    <span>•</span>
+                    <span>Secure</span>
+                    <span>•</span>
+                    <span>Global</span>
+                  </div>
+                </div>
+              ) : status === 'Waiting' ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 animate-in zoom-in duration-500">
+                  <div className="relative">
+                    <div className="w-32 h-32 border-4 border-blue-500/20 rounded-full" />
+                    <div className="absolute inset-0 w-32 h-32 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <Globe className="absolute inset-0 m-auto w-12 h-12 text-blue-500 animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold text-white">Finding a Partner...</h2>
+                    <p className="text-gray-400 font-medium">Matching you with someone based on availability.</p>
+                  </div>
+                  <button 
+                    onClick={endSession}
+                    className="text-gray-500 hover:text-white text-sm font-medium underline underline-offset-4 transition-colors"
+                  >
+                    Cancel Search
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <ChatBox 
+                    messages={messages} 
+                    isPartnerTyping={isPartnerTyping} 
+                    socketId={myUserId} // Pass myUserId instead of socket.id
+                    status={status}
+                    onDeleteMessage={deleteMessage}
+                    partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
+                    onZoomImage={setZoomedImage}
+                  />
+                  {partnerMediaStatus && (
+                    <div className="absolute bottom-24 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                      <span className="text-[11px] font-bold text-white tracking-wider uppercase">
+                        {status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'} is sending {partnerMediaStatus === 'image' ? 'a photo' : 'media'}...
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
         </main>
 
         {/* Input Area (Fixed height at bottom) */}
-        {status !== 'Idle' && (
+        {status !== 'Idle' && !isStealthMode && (
           <footer className="shrink-0 w-full max-w-3xl mx-auto px-4 pb-6 pt-2 z-20">
             <input 
               type="file" 
