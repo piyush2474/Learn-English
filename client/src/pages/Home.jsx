@@ -63,6 +63,7 @@ const Home = () => {
   const [isSendingInform, setIsSendingInform] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [partnerMediaStatus, setPartnerMediaStatus] = useState(null); // 'image' | 'video' | null
+  const [partnerUserId, setPartnerUserId] = useState(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -204,6 +205,7 @@ const Home = () => {
       setStatus('Matched');
       setRoomId(data.roomId);
       roomIdRef.current = data.roomId;
+      setPartnerUserId(data.partnerUserId);
       
       const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
       if (savedKey) {
@@ -257,6 +259,7 @@ const Home = () => {
       setRoomId(data.roomId);
       setStatus('Matched');
       setMessages([]); // Clear previous chat
+      setPartnerUserId(data.partnerUserId);
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
@@ -1205,15 +1208,9 @@ const Home = () => {
                   // Skip for global or special rooms
                   if (roomId === 'global' || roomId === 'practice_with_you') return null;
 
-                  // Extract partner ID
-                  let partnerId = roomId;
-                  if (roomId.startsWith('private_')) {
-                    partnerId = roomId.replace('private_', '').replace(myUserId, '').replace('_', '');
-                  }
+                  const isAlreadyFriend = friends.some(f => f.userId === partnerUserId);
 
-                  const isAlreadyFriend = friends.some(f => f.userId === partnerId);
-
-                  if (isAlreadyFriend) return null;
+                  if (isAlreadyFriend || !partnerUserId) return null;
 
                   return (
                     <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
