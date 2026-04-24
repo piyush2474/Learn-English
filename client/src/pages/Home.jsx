@@ -64,14 +64,54 @@ const Home = () => {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [partnerMediaStatus, setPartnerMediaStatus] = useState(null); // 'image' | 'video' | null
   const [partnerUserId, setPartnerUserId] = useState(null);
-  const [vanishMode, setVanishMode] = useState('off'); // 'off' | '1h' | '24h'
   const [isStealthMode, setIsStealthMode] = useState(false);
+  const [stealthWord, setStealthWord] = useState(null);
+  const [isFetchingWord, setIsFetchingWord] = useState(false);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const localVideoRef = useRef(null);
   const vcChatRef = useRef(null);
+
+  // --- Stealth Mode Metadata & Call Suppression ---
+  useEffect(() => {
+    const originalTitle = "Learn English - Chat";
+    
+    if (isStealthMode) {
+      document.title = "English Prep - Vocabulary Builder";
+      // Mute and silence if in a call
+      if (isCalling || callAccepted) {
+        setIsMicMuted(true);
+        if (remoteAudioRef.current) remoteAudioRef.current.muted = true;
+      }
+      // Initial fetch if empty
+      if (!stealthWord) fetchNewWord();
+    } else {
+      document.title = originalTitle;
+      if (remoteAudioRef.current) remoteAudioRef.current.muted = false;
+    }
+
+    return () => { document.title = originalTitle; };
+  }, [isStealthMode]);
+
+  const fetchNewWord = async () => {
+    const commonSophisticatedWords = ['Ubiquitous', 'Ephemeral', 'Pragmatic', 'Resilient', 'Eloquence', 'Alacrity', 'Paradigm', 'Luminous', 'Pensive', 'Quintessential'];
+    const randomWord = commonSophisticatedWords[Math.floor(Math.random() * commonSophisticatedWords.length)];
+    
+    setIsFetchingWord(true);
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${randomWord}`);
+      const data = await response.json();
+      if (data && data[0]) {
+        setStealthWord(data[0]);
+      }
+    } catch (err) {
+      console.error("Stealth fetch failed:", err);
+    } finally {
+      setIsFetchingWord(false);
+    }
+  };
 
   // Auto-scroll VC chat
   useEffect(() => {
@@ -788,8 +828,7 @@ const Home = () => {
       senderId: myUserId, // Use persistent ID instead of socket.id
       type: 'text',
       messageId,
-      timestamp: new Date().toISOString(),
-      vanishMode
+      timestamp: new Date().toISOString()
     };
 
     socket.emit('send_message', messageData);
@@ -871,8 +910,7 @@ const Home = () => {
         senderId: myUserId,
         type: 'image',
         messageId,
-        timestamp: new Date().toISOString(),
-        vanishMode
+        timestamp: new Date().toISOString()
       };
 
       socket.emit('send_message', messageData);
@@ -958,43 +996,140 @@ const Home = () => {
   };
 
   // --- Stealth Mode (Panic Button) Component ---
-  const VocabularyStudy = () => (
-    <div className="flex-1 bg-[#171717] overflow-y-auto p-6 animate-in fade-in duration-500">
-      <div className="max-w-2xl mx-auto space-y-8">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <h2 className="text-2xl font-bold text-white">Daily English Vocabulary</h2>
-          <span className="text-blue-500 font-medium">Lesson 14: Academic Verbs</span>
-        </div>
-        
-        <div className="grid gap-4">
-          {[
-            { word: 'Analyze', type: 'verb', def: 'To examine something in detail.' },
-            { word: 'Interpret', type: 'verb', def: 'To explain the meaning of information.' },
-            { word: 'Evaluate', type: 'verb', def: 'To judge the value or condition of something.' },
-            { word: 'Synthesize', type: 'verb', def: 'To combine elements to form a connected whole.' },
-            { word: 'Hypothesize', type: 'verb', def: 'To suggest a theory or explanation.' },
-            { word: 'Validate', type: 'verb', def: 'To check or prove the accuracy of something.' },
-          ].map((item, i) => (
-            <div key={i} className="bg-[#212121] p-4 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors">
-              <div className="flex items-baseline gap-3 mb-1">
-                <span className="text-lg font-bold text-white">{item.word}</span>
-                <span className="text-xs text-gray-500 italic">({item.type})</span>
-              </div>
-              <p className="text-sm text-gray-400">{item.def}</p>
-            </div>
-          ))}
-        </div>
+  const VocabularyStudy = () => {
+    const [practiceText, setPracticeText] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-        <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/20">
-          <h3 className="text-blue-400 font-bold mb-2 uppercase tracking-widest text-[11px]">Grammar Tip</h3>
-          <p className="text-gray-300 text-sm leading-relaxed">
-            When using the verb "Analyze," remember to use it with a direct object. 
-            Example: "We need to analyze the data before making a decision."
-          </p>
+    const handleAnalyze = () => {
+      if (!practiceText.trim()) return;
+      setIsAnalyzing(true);
+      setTimeout(() => setIsAnalyzing(false), 2000);
+    };
+
+    return (
+      <div className="flex-1 bg-[#171717] overflow-y-auto p-4 sm:p-8 animate-in fade-in zoom-in-95 duration-500">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Top Progress Bar (Fake) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+              <span>Overall Course Progress</span>
+              <span className="text-blue-500">64% Complete</span>
+            </div>
+            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full w-[64%] bg-blue-500 rounded-full" />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Left Column: Word of the Day */}
+            <div className="md:col-span-2 space-y-6">
+              <div className="bg-[#212121] p-6 rounded-3xl border border-white/5 shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4">
+                  <button 
+                    onClick={fetchNewWord}
+                    disabled={isFetchingWord}
+                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-blue-400 transition-all hover:rotate-180 duration-500"
+                    title="Next Lesson"
+                  >
+                    <RefreshCw className={`w-5 h-5 ${isFetchingWord ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="inline-block px-3 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-widest rounded-full border border-blue-500/20">
+                    Word of the Day
+                  </div>
+                  
+                  {stealthWord ? (
+                    <div className="space-y-3">
+                      <div>
+                        <h2 className="text-4xl font-extrabold text-white capitalize">{stealthWord.word}</h2>
+                        <p className="text-blue-400 font-medium text-sm mt-1">{stealthWord.phonetic}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-gray-300 leading-relaxed italic">
+                          "{stealthWord.meanings[0].definitions[0].definition}"
+                        </p>
+                        {stealthWord.meanings[0].definitions[0].example && (
+                          <p className="text-gray-500 text-sm border-l-2 border-white/10 pl-4 py-1">
+                            Example: {stealthWord.meanings[0].definitions[0].example}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center text-gray-500 italic">
+                      Loading lesson content...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Grammar Sandbox */}
+              <div className="bg-[#212121] p-6 rounded-3xl border border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Grammar Sandbox</h3>
+                  {isAnalyzing && <span className="text-[10px] text-blue-400 animate-pulse font-bold">Analyzing syntax...</span>}
+                </div>
+                <textarea 
+                  value={practiceText}
+                  onChange={(e) => setPracticeText(e.target.value)}
+                  placeholder="Type a sentence to check your grammar..."
+                  className="w-full bg-black/20 border border-white/5 rounded-2xl p-4 text-sm text-gray-200 focus:outline-none focus:border-blue-500/50 transition-colors min-h-[120px] resize-none"
+                />
+                <button 
+                  onClick={handleAnalyze}
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold transition-all border border-white/5"
+                >
+                  Verify Structure
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column: Stats & Quiz */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 p-6 rounded-3xl border border-white/10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-blue-400 uppercase">Proficiency</p>
+                    <p className="text-sm font-bold text-white">B2 Upper Intermediate</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Daily Goal</span>
+                    <span className="text-gray-200">12/20 Words</span>
+                  </div>
+                  <div className="h-1 bg-white/5 rounded-full">
+                    <div className="h-full w-[60%] bg-blue-400 rounded-full" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Quiz Card */}
+              <div className="bg-[#212121] p-6 rounded-3xl border border-white/5 space-y-4">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Daily Mini-Quiz</h3>
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-300 font-medium">Choose the correct preposition:</p>
+                  <p className="text-sm font-bold text-white">"I am looking forward ___ meeting you."</p>
+                  <div className="grid gap-2">
+                    {['for', 'to', 'at'].map((opt) => (
+                      <button key={opt} className="w-full py-2 px-4 bg-white/5 hover:bg-blue-500/20 hover:text-blue-400 rounded-lg text-xs text-gray-400 text-left transition-all border border-transparent hover:border-blue-500/30">
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const toggleStealth = () => {
     setIsStealthMode(prev => !prev);
@@ -1250,30 +1385,6 @@ const Home = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Vanish Mode Toggle (Only in chats) */}
-            {(status === 'Matched' || status === 'Disconnected') && roomId && !isStealthMode && (
-              <div className="flex items-center bg-black/20 rounded-lg p-0.5 mr-2 border border-white/5">
-                {[
-                  { id: 'off', label: '∞', title: 'Normal Mode' },
-                  { id: '1h', label: '1H', title: 'Vanish after 1 Hour' },
-                  { id: '24h', label: '24H', title: 'Vanish after 24 Hours' }
-                ].map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => setVanishMode(mode.id)}
-                    className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${
-                      vanishMode === mode.id 
-                        ? 'bg-blue-600 text-white shadow-lg' 
-                        : 'text-gray-500 hover:text-white'
-                    }`}
-                    title={mode.title}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5" />
             </button>
