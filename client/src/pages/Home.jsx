@@ -190,7 +190,8 @@ const Home = () => {
       }
       
       // Mark seen
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: id });
+      const currentId = localStorage.getItem('chat_user_id');
+      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
     });
 
     socket.on('partner_rejoined', async () => {
@@ -199,8 +200,8 @@ const Home = () => {
         { message: 'Partner is back!', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
       // Re-send our public key in case the partner lost theirs
-      if (myKeyPair) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPair.publicKey);
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
         socket.emit('exchange_keys', { roomId: sessionStorage.getItem('current_room_id'), publicKey: pubKeyBase64 });
       }
     });
@@ -242,8 +243,8 @@ const Home = () => {
       }
 
       // Send our public key to the partner
-      if (myKeyPair) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPair.publicKey);
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
         socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
       }
     });
@@ -458,6 +459,11 @@ const Home = () => {
       socket.off('init_data');
       socket.off('profile_updated');
       socket.off('inform_sent');
+      socket.off('exchange_keys');
+      socket.off('chat_history');
+      socket.off('messages_marked_seen');
+      socket.off('message_deleted');
+      socket.off('chat_cleared');
       // socket.disconnect(); // REMOVED: Keep connection stable
     };
   }, [myUserId]); 

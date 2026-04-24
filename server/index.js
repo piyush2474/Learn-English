@@ -54,10 +54,23 @@ const app = express();
 app.use(cors());
 
 // --- Database Connection ---
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/learn_english_chat";
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+const connectDB = async () => {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log("Connected to MongoDB");
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    console.log("Retrying MongoDB connection in 5 seconds...");
+    setTimeout(connectDB, 5000);
+  }
+};
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected! Retrying...');
+  connectDB();
+});
+
+connectDB();
 // --------------------------
 
 const activeUsers = new Set();
