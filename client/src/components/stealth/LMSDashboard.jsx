@@ -1,15 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutGrid, Globe, Check, Users, RefreshCw, Mic, 
-  Volume2, BookOpen, GraduationCap, TrendingUp, Search
+  Volume2, BookOpen, GraduationCap, TrendingUp, Search,
+  Copy, Languages, ArrowRight
 } from 'lucide-react';
 
 const LMSDashboard = ({ isFetchingWord, stealthWord, fetchNewWord }) => {
-  const [activeTab, setActiveTab] = useState('vocabulary');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [practiceText, setPracticeText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [synonyms, setSynonyms] = useState([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // --- Translation States ---
+  const [transText, setTransText] = useState('');
+  const [transResult, setTransResult] = useState('');
+  const [targetLang, setTargetLang] = useState('gu'); // Default Gujarati
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  const languages = [
+    { code: 'gu', name: 'Gujarati' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ar', name: 'Arabic' }
+  ];
+
+  const handleTranslate = async () => {
+    if (!transText.trim()) return;
+    setIsTranslating(true);
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(transText)}&langpair=en|${targetLang}`);
+      const data = await res.json();
+      if (data.responseData) {
+        setTransResult(data.responseData.translatedText);
+      }
+    } catch (err) {
+      console.error("Translation failed:", err);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   // Fetch synonyms whenever stealthWord changes
   useEffect(() => {
@@ -221,13 +254,90 @@ const LMSDashboard = ({ isFetchingWord, stealthWord, fetchNewWord }) => {
           )}
 
           {activeTab === 'dashboard' && (
-            <div className="space-y-24 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-              <header className="space-y-2">
-                <p className="text-blue-500 font-bold text-xs uppercase tracking-widest">Student Overview</p>
-                <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter">Academic Progress</h2>
-              </header>
+            <div className="space-y-32 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+              {/* Translation Hero Module */}
+              <section className="space-y-12">
+                <header className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-4 bg-blue-500" />
+                    <p className="text-blue-500 font-bold text-[10px] uppercase tracking-[0.3em]">Language Translation Engine</p>
+                  </div>
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                    <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter max-w-2xl">
+                      Master the <span className="text-blue-500">Universal</span> Language.
+                    </h2>
+                    
+                    {/* Language Selector */}
+                    <div className="flex items-center gap-4 bg-white/[0.02] border border-white/[0.05] rounded-full px-6 py-3">
+                      <Languages className="w-4 h-4 text-gray-500" />
+                      <select 
+                        value={targetLang}
+                        onChange={(e) => setTargetLang(e.target.value)}
+                        className="bg-transparent border-none text-[10px] font-black text-white outline-none uppercase tracking-widest cursor-pointer"
+                      >
+                        {languages.map(lang => (
+                          <option key={lang.code} value={lang.code} className="bg-[#121212]">{lang.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </header>
 
-              <div className="grid md:grid-cols-3 gap-16">
+                <div className="relative group">
+                  <textarea 
+                    value={transText}
+                    onChange={(e) => setTransText(e.target.value)}
+                    placeholder="Type in English..."
+                    className="w-full bg-transparent border-none text-3xl md:text-5xl text-white placeholder:text-white/[0.03] focus:outline-none resize-none leading-tight font-black min-h-[120px]"
+                  />
+                  
+                  {transResult && (
+                    <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                      <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest flex items-center gap-2">
+                        Translation <ArrowRight className="w-3 h-3" /> {languages.find(l => l.code === targetLang)?.name}
+                      </p>
+                      <div className="flex items-start justify-between gap-8">
+                        <p className="text-3xl md:text-5xl font-black text-blue-500 tracking-tight leading-tight">
+                          {transResult}
+                        </p>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(transResult);
+                            // Simple visual feedback could go here
+                          }}
+                          className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all shrink-0 active:scale-90"
+                        >
+                          <Copy className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-12 flex items-center gap-6">
+                    <button 
+                      onClick={handleTranslate}
+                      disabled={isTranslating || !transText.trim()}
+                      className={`group flex items-center gap-4 px-10 py-5 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
+                        isTranslating 
+                          ? 'bg-blue-600/50 text-white cursor-not-allowed' 
+                          : 'bg-white text-black hover:scale-105 active:scale-95'
+                      }`}
+                    >
+                      {isTranslating ? 'Processing Logic...' : 'Translate Logic'}
+                      {!isTranslating && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
+                    </button>
+                    
+                    <button 
+                      onClick={() => { setTransText(''); setTransResult(''); }}
+                      className="text-[10px] font-bold text-gray-600 uppercase tracking-widest hover:text-white transition-colors"
+                    >
+                      Clear Engine
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <div className="grid md:grid-cols-3 gap-16 border-t border-white/[0.03] pt-24">
                 <div className="space-y-6">
                   <div className="text-6xl font-black text-white">14</div>
                   <div className="h-[2px] w-12 bg-blue-500" />
