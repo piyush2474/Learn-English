@@ -1044,31 +1044,13 @@ const Home = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#212121]">
         {!isSocketConnected && (
-          <div className="absolute inset-0 z-[1000] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-500">
-            <div className="relative mb-8">
-              {/* Outer pulsing ring */}
-              <div className="absolute inset-0 scale-150 bg-blue-500/20 rounded-full animate-ping" />
-              <div className="absolute inset-0 scale-125 bg-blue-500/10 rounded-full animate-pulse" />
-              
-              <div className="w-20 h-20 bg-[#1a1a1a] rounded-3xl border border-white/10 flex items-center justify-center shadow-2xl relative z-10">
-                <RefreshCw className="w-10 h-10 text-blue-400 animate-spin duration-[2000ms]" />
-              </div>
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-4 bg-[#2f2f2f]/90 backdrop-blur-md border border-blue-500/30 px-6 py-3 rounded-2xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
+            <div className="relative">
+              <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
             </div>
-
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Reconnecting</h2>
-              <div className="flex items-center justify-center gap-1.5 text-blue-400 font-medium">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:200ms]" />
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:400ms]" />
-              </div>
-              <p className="text-gray-400 max-w-xs text-[14px] leading-relaxed">
-                Your internet connection is unstable. We are restoring your session automatically...
-              </p>
-            </div>
-            
-            <div className="mt-12 text-[11px] text-gray-500 uppercase tracking-widest font-bold">
-              Learn English Real-time Engine
+            <div className="flex flex-col">
+              <h2 className="text-sm font-bold text-white">Reconnecting</h2>
+              <p className="text-[11px] text-gray-400">Restoring your session...</p>
             </div>
           </div>
         )}
