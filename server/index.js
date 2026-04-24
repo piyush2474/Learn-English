@@ -114,7 +114,8 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   },
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e7 // 10MB
 });
 
 const rooms = new Map(); // Store room state: roomId -> { users: Set(userIds), sockets: Map(userId -> socketId) }

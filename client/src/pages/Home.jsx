@@ -778,29 +778,61 @@ const Home = () => {
     socket.emit('typing', { roomId, isTyping: false });
   };
 
+  const compressImage = (base64Str, maxWidth = 1200, maxHeight = 1200) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality JPEG
+      };
+    });
+  };
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !roomId) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Image too large. Please select an image under 2MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image too large. Please select an image under 10MB.");
       return;
     }
 
     const reader = new FileReader();
     reader.onload = async () => {
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const base64Image = reader.result;
+      const rawBase64 = reader.result;
+      const compressedBase64 = await compressImage(rawBase64);
       
-      let finalMessage = base64Image;
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      let finalMessage = compressedBase64;
       if (sharedKeyRef.current) {
-        finalMessage = await encryptWithKey(base64Image, sharedKeyRef.current);
+        finalMessage = await encryptWithKey(compressedBase64, sharedKeyRef.current);
       }
 
       const messageData = {
         message: finalMessage,
         roomId,
-        senderId: myUserId, // Use persistent ID instead of socket.id
+        senderId: myUserId,
         type: 'image',
         messageId,
         timestamp: new Date().toISOString()
@@ -808,15 +840,15 @@ const Home = () => {
 
       socket.emit('send_message', messageData);
       
-      // Convert to Blob for local display privacy too
-      let localDisplay = base64Image;
+      // Convert to Blob for local display privacy
+      let localDisplay = compressedBase64;
       try {
-        const res = await fetch(base64Image);
+        const res = await fetch(compressedBase64);
         const blob = await res.blob();
         localDisplay = URL.createObjectURL(blob);
       } catch (e) {}
 
-      setMessages((prev) => [...prev, { ...messageData, message: localDisplay }]);
+      setMessages((prev) => [...prev, { ...messageData, message: localDisplay, rawContent: finalMessage }]);
     };
     reader.readAsDataURL(file);
     // Reset input
