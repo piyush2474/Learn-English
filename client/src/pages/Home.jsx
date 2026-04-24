@@ -1190,15 +1190,45 @@ const Home = () => {
             <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
               <Plus className="w-5 h-5 text-gray-400" />
             </button>
-            {status === 'Matched' && roomId?.startsWith('private_') && (
-              <button onClick={clearChat} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="Clear Chat History">
-                <Trash2 className="w-5 h-5" />
-              </button>
-            )}
-            {status === 'Matched' && !friends.find(f => f.userId === roomId) && (
-              <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
-                <UserPlus className="w-5 h-5" />
-              </button>
+            
+            {status === 'Matched' && roomId && (
+              <>
+                {/* Clear Chat (Private Only) */}
+                {roomId.startsWith('private_') && (
+                  <button onClick={clearChat} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="Clear Chat History">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+
+                {/* Friend Logic */}
+                {(() => {
+                  // Skip for global or special rooms
+                  if (roomId === 'global' || roomId === 'practice_with_you') return null;
+
+                  // Extract partner ID
+                  let partnerId = roomId;
+                  if (roomId.startsWith('private_')) {
+                    partnerId = roomId.replace('private_', '').replace(myUserId, '').replace('_', '');
+                  }
+
+                  const isAlreadyFriend = friends.some(f => f.userId === partnerId);
+
+                  if (isAlreadyFriend) {
+                    return (
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg ml-1">
+                        <Check className="w-3.5 h-3.5 text-blue-400" />
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">Friend</span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
+                      <UserPlus className="w-5 h-5" />
+                    </button>
+                  );
+                })()}
+              </>
             )}
           </div>
         </header>
