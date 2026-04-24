@@ -27,8 +27,9 @@ const handleMatchmaking = (io, socket, rooms) => {
       ])
     });
 
-    io.to(roomId).emit("matched", { roomId });
-    console.log(`Matched ${socket.id} with ${partner.id} in room ${roomId}`);
+    socket.emit("matched", { roomId, partnerUserId: partner.userId });
+    partner.emit("matched", { roomId, partnerUserId: socket.userId });
+    console.log(`Matched ${socket.userId} with ${partner.userId} in room ${roomId}`);
   } else {
     waitingUsers.push(socket);
     socket.emit("waiting", { message: "Waiting for a partner..." });

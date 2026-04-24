@@ -299,7 +299,8 @@ io.on("connection", (socket) => {
         disconnectTimeouts.delete(roomId);
       }
 
-      socket.emit("rejoined", { roomId });
+      const partnerUserId = [...room.users].find(id => id !== userId);
+      socket.emit("rejoined", { roomId, partnerUserId });
       socket.to(roomId).emit("partner_rejoined");
       console.log(`User ${userId} rejoined room ${roomId}`);
 
