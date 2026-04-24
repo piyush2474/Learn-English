@@ -54,6 +54,8 @@ const app = express();
 app.use(cors());
 
 // --- Database Connection ---
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/learn_english_chat";
+
 const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI);
