@@ -17,11 +17,7 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
 
   const handleImageClick = () => {
     if (isUploading) return;
-    if (!isRevealed) {
-      setIsRevealed(true);
-    } else {
-      onZoom(message);
-    }
+    onZoom(message);
   };
 
   return (
@@ -58,39 +54,32 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
             {type === 'image' ? (
               <div 
                 onClick={handleImageClick}
-                className="relative mt-1 w-48 h-48 sm:w-60 sm:h-60 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer"
+                className="relative mt-1 w-44 h-14 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer flex items-center px-3 gap-3 bg-black/20 hover:bg-black/40 transition-all"
               >
-                <img 
-                  src={message} 
-                  alt="shared" 
-                  className={`w-full h-full object-cover transition-all duration-500 group-hover/img:scale-105 
-                    ${isUploading || !isRevealed ? 'blur-2xl scale-110' : 'blur-0'}
-                  `}
-                />
-                
-                {isUploading ? (
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3">
-                    <div className="w-8 h-8 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                    <span className="text-[10px] font-bold text-white tracking-widest uppercase">Sending...</span>
+                {/* Tiny blurred preview in the pill */}
+                <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 relative">
+                  <img 
+                    src={message} 
+                    alt="shared" 
+                    className="w-full h-full object-cover blur-md scale-150"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    {isUploading ? (
+                      <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                    ) : (
+                      <Languages className="w-4 h-4 text-white/70" />
+                    )}
                   </div>
-                ) : !isRevealed ? (
-                  <div className="absolute inset-0 bg-black/20 flex flex-col items-center justify-center gap-2 group-hover:bg-black/40 transition-colors">
-                    <div className="p-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
-                      <Maximize2 className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-[11px] font-bold text-white tracking-tight uppercase bg-black/40 px-2 py-0.5 rounded shadow-sm">Tap to Reveal</span>
-                  </div>
-                ) : null}
+                </div>
 
-                {!isUploading && isRevealed && (
-                  <button 
-                    onClick={handleDownload}
-                    className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all transform translate-y-2 group-hover/img:translate-y-0"
-                    title="Download Image"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="text-[13px] font-bold text-white/90 truncate uppercase tracking-wider">
+                    {isUploading ? 'Sending...' : 'Photo Received'}
+                  </span>
+                  <span className="text-[10px] text-white/40 font-medium">Click to view full</span>
+                </div>
+
+                <Maximize2 className="w-4 h-4 text-white/20 group-hover/img:text-white/60 transition-colors" />
               </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>
