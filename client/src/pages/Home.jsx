@@ -138,6 +138,30 @@ const Home = () => {
     }
   }, [isSpeakerMode]);
 
+  // Decryption Watcher: When sharedKey arrives, decrypt any "locked" messages
+  useEffect(() => {
+    if (sharedKey && messages.length > 0) {
+      const needsDecryption = messages.some(m => m.message === "[Encrypted Message]" && m.rawContent);
+      if (needsDecryption) {
+        const decryptMissing = async () => {
+          const updated = await Promise.all(messages.map(async (msg) => {
+            if (msg.message === "[Encrypted Message]" && msg.rawContent) {
+              try {
+                const decrypted = await decryptWithKey(msg.rawContent, sharedKey);
+                return { ...msg, message: decrypted };
+              } catch (e) {
+                return msg;
+              }
+            }
+            return msg;
+          }));
+          setMessages(updated);
+        };
+        decryptMissing();
+      }
+    }
+  }, [sharedKey, messages]);
+
   // Robust list of free STUN servers
   const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -192,6 +216,12 @@ const Home = () => {
       // Mark seen
       const currentId = localStorage.getItem('chat_user_id');
       socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
+
+      // Trigger key exchange in case the other person doesn't have our key
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
+        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
+      }
     });
 
     socket.on('partner_rejoined', async () => {
@@ -265,20 +295,28 @@ const Home = () => {
 
     socket.on('chat_history', async (history) => {
       const storedKey = localStorage.getItem(`shared_key_${roomIdRef.current}`);
-      if (storedKey) {
-        const decryptedHistory = await Promise.all(history.map(async (msg) => {
+      const decryptHistory = async (key) => {
+        return await Promise.all(history.map(async (msg) => {
           try {
-            const key = await importSharedKey(storedKey);
             const decrypted = await decryptWithKey(msg.message, key);
-            return { ...msg, message: decrypted };
+            return { ...msg, message: decrypted, rawContent: msg.message };
           } catch (e) {
-            return { ...msg, message: "[Encrypted Message]" };
+            return { ...msg, message: "[Encrypted Message]", rawContent: msg.message };
           }
         }));
-        setMessages(decryptedHistory);
-        socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: myUserId });
+      };
+
+      if (storedKey) {
+        try {
+          const key = await importSharedKey(storedKey);
+          const decrypted = await decryptHistory(key);
+          setMessages(decrypted);
+          socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: myUserId });
+        } catch (e) {
+          setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
+        }
       } else {
-        setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]" })));
+        setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
       }
     });
 
@@ -288,16 +326,21 @@ const Home = () => {
 
     socket.on('receive_message', async (data) => {
       let displayMessage = data.message;
+      let rawContent = data.message;
+
       if (sharedKeyRef.current) {
         try {
           displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
         } catch (e) {
           console.error("Decryption failed:", e);
+          displayMessage = "[Encrypted Message]";
         }
+      } else {
+        displayMessage = "[Encrypted Message]";
       }
 
       // If it's an image, convert to Blob URL for privacy
-      if (data.type === 'image' && displayMessage.startsWith('data:')) {
+      if (data.type === 'image' && displayMessage !== "[Encrypted Message]" && displayMessage.startsWith('data:')) {
         try {
           const res = await fetch(displayMessage);
           const blob = await res.blob();
@@ -305,7 +348,7 @@ const Home = () => {
         } catch (e) { console.error("Blob conversion failed", e); }
       }
 
-      setMessages((prev) => [...prev, { ...data, message: displayMessage }]);
+      setMessages((prev) => [...prev, { ...data, message: displayMessage, rawContent }]);
       setIsPartnerTyping(false);
       
       // Mark as seen if we are in this room
