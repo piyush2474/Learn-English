@@ -3,6 +3,7 @@ import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck } fr
 
 const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status, onZoom, isUploading }) => {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [isRevealed, setIsRevealed] = useState(isSelf); // Auto-reveal own messages
 
   const handleDownload = (e) => {
     e.stopPropagation();
@@ -12,6 +13,15 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleImageClick = () => {
+    if (isUploading) return;
+    if (!isRevealed) {
+      setIsRevealed(true);
+    } else {
+      onZoom(message);
+    }
   };
 
   return (
@@ -46,22 +56,33 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
           {/* Message Content */}
           <div className="text-[15px] leading-relaxed break-words">
             {type === 'image' ? (
-              <div className="relative mt-1 w-48 h-48 sm:w-60 sm:h-60 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer">
+              <div 
+                onClick={handleImageClick}
+                className="relative mt-1 w-48 h-48 sm:w-60 sm:h-60 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer"
+              >
                 <img 
                   src={message} 
                   alt="shared" 
-                  className={`w-full h-full object-cover transition-all duration-300 group-hover/img:scale-105 ${isUploading ? 'blur-md scale-110' : ''}`}
-                  onClick={() => !isUploading && onZoom(message)}
+                  className={`w-full h-full object-cover transition-all duration-500 group-hover/img:scale-105 
+                    ${isUploading || !isRevealed ? 'blur-2xl scale-110' : 'blur-0'}
+                  `}
                 />
                 
-                {isUploading && (
+                {isUploading ? (
                   <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3">
                     <div className="w-8 h-8 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
                     <span className="text-[10px] font-bold text-white tracking-widest uppercase">Sending...</span>
                   </div>
-                )}
+                ) : !isRevealed ? (
+                  <div className="absolute inset-0 bg-black/20 flex flex-col items-center justify-center gap-2 group-hover:bg-black/40 transition-colors">
+                    <div className="p-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
+                      <Maximize2 className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-[11px] font-bold text-white tracking-tight uppercase bg-black/40 px-2 py-0.5 rounded shadow-sm">Tap to Reveal</span>
+                  </div>
+                ) : null}
 
-                {!isUploading && (
+                {!isUploading && isRevealed && (
                   <button 
                     onClick={handleDownload}
                     className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all transform translate-y-2 group-hover/img:translate-y-0"
