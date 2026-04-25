@@ -87,7 +87,7 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-between py-12 px-6 animate-in fade-in duration-500 overflow-hidden font-sans">
+    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-between py-6 px-6 animate-in fade-in duration-500 overflow-hidden font-sans">
       {/* Background Decorative Gradient */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
@@ -97,102 +97,102 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
         {step === 'confirm' ? (
           <button 
             onClick={() => { setStep('create'); setConfirmPin(''); }}
-            className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-white transition-all active:scale-90"
+            className="p-2.5 bg-white/5 rounded-2xl text-gray-400 hover:text-white transition-all active:scale-90"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-4 h-4" />
           </button>
         ) : (
-          <div className="w-11" /> // Spacer
+          <div className="w-10" />
         )}
         
         <div className="flex flex-col items-center">
           <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mb-1 shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Security Protocol</span>
+          <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em]">Security</span>
         </div>
 
         {onClose ? (
           <button 
             onClick={onClose}
-            className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-red-500 transition-all active:scale-90"
+            className="p-2.5 bg-white/5 rounded-2xl text-gray-400 hover:text-red-500 transition-all active:scale-90"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         ) : (
-          <div className="w-11" />
+          <div className="w-10" />
         )}
       </div>
 
       {/* Center Content */}
       <div className={`w-full max-w-md flex flex-col items-center relative z-20 flex-1 justify-center ${isAnimating ? 'animate-shake' : ''}`}>
         {/* Animated Icon Container */}
-        <div className="relative mb-8">
-          <div className={`w-24 h-24 rounded-[32px] flex items-center justify-center transition-all duration-500 ${
+        <div className="relative mb-4 md:mb-8">
+          <div className={`w-16 h-16 md:w-24 md:h-24 rounded-[24px] md:rounded-[32px] flex items-center justify-center transition-all duration-500 ${
             error ? 'bg-red-500/10 border-red-500/30' : 'bg-blue-500/10 border-blue-500/30'
           } border shadow-[0_0_40px_rgba(0,0,0,0.5)]`}>
-            {step === 'verify' ? <Lock className="w-10 h-10 text-blue-500" /> : 
-             step === 'confirm' ? <ShieldAlert className="w-10 h-10 text-orange-500" /> :
-             <ShieldCheck className="w-10 h-10 text-green-500" />}
+            {step === 'verify' ? <Lock className="w-8 h-8 md:w-10 md:h-10 text-blue-500" /> : 
+             step === 'confirm' ? <ShieldAlert className="w-8 h-8 md:w-10 md:h-10 text-orange-500" /> :
+             <ShieldCheck className="w-8 h-8 md:w-10 md:h-10 text-green-500" />}
           </div>
         </div>
 
-        <h2 className="text-3xl font-black text-white mb-3 tracking-tighter text-center">
+        <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tighter text-center">
           {step === 'create' ? 'Create Vault PIN' : 
            step === 'confirm' ? 'Confirm PIN' : 
            'Private Vault'}
         </h2>
-        <p className="text-gray-500 text-sm font-medium mb-12 text-center max-w-[280px] leading-relaxed">
+        <p className="text-gray-500 text-[12px] md:text-sm font-medium mb-6 md:mb-12 text-center max-w-[260px] leading-relaxed">
           {step === 'create' ? 'Protect your conversations with a secure 4-digit PIN' : 
            step === 'confirm' ? 'Re-enter your PIN to verify and activate the vault' : 
            'Your identity and chats are secured by the vault'}
         </p>
 
         {/* PIN Indicators */}
-        <div className="flex gap-6 mb-16">
+        <div className="flex gap-5 mb-8 md:mb-16">
           {[0, 1, 2, 3].map((i) => (
             <div 
               key={i}
-              className={`w-4 h-4 rounded-full transition-all duration-300 border-2 ${
+              className={`w-3 h-3 md:w-4 md:h-4 rounded-full transition-all duration-300 border-2 ${
                 currentPin.length > i 
-                  ? 'bg-blue-500 border-blue-500 scale-150 shadow-[0_0_25px_rgba(59,130,246,0.8)]' 
+                  ? 'bg-blue-500 border-blue-500 scale-125 md:scale-150 shadow-[0_0_25px_rgba(59,130,246,0.8)]' 
                   : 'bg-white/10 border-white/5'
               } ${error ? 'border-red-500 bg-red-500/30' : ''}`}
             />
           ))}
         </div>
 
-        {/* Number Pad (Optimized for thumb reach) */}
-        <div className="grid grid-cols-3 gap-x-8 gap-y-6 w-full max-w-[320px]">
+        {/* Number Pad (More compact for mobile) */}
+        <div className="grid grid-cols-3 gap-x-6 md:gap-x-8 gap-y-4 md:gap-y-6 w-full max-w-[280px] md:max-w-[320px]">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleKeyPress(num.toString())}
-              className="h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+              className="h-14 md:h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
             >
               {num}
             </button>
           ))}
-          <div /> {/* Spacer */}
+          <div />
           <button
             onClick={() => handleKeyPress('0')}
-            className="h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+            className="h-14 md:h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
           >
             0
           </button>
           <button
             onClick={handleBackspace}
-            className="h-20 rounded-full flex items-center justify-center text-gray-400 active:scale-90 transition-all"
+            className="h-14 md:h-20 rounded-full flex items-center justify-center text-gray-400 active:scale-90 transition-all"
           >
-            <Delete className="w-8 h-8" />
+            <Delete className="w-6 h-6 md:w-8 md:h-8" />
           </button>
         </div>
       </div>
 
-      {/* Bottom Action Button (Full Width) */}
-      <div className="w-full max-w-md mt-10 relative z-20">
+      {/* Bottom Action Button */}
+      <div className="w-full max-w-md mt-6 md:mt-10 relative z-20">
         <button
           onClick={handleSubmit}
           disabled={currentPin.length !== 4}
-          className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 ${
+          className={`w-full py-4 md:py-5 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 ${
             currentPin.length === 4 
               ? 'bg-blue-600 text-white shadow-[0_20px_40px_-10px_rgba(37,99,235,0.5)]' 
               : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5'

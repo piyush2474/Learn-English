@@ -467,7 +467,6 @@ const Home = () => {
       if (data.isVaultEnabled !== undefined) setIsVaultEnabled(data.isVaultEnabled);
       if (data.success) {
         setShowVaultGate(null);
-        if (data.message) alert(data.message);
       } else if (data.error) {
         alert(data.error);
       }
