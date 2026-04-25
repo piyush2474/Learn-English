@@ -1229,6 +1229,10 @@ const Home = () => {
               <MessageCircle className="w-5 h-5" />
             </button>
 
+            <button onClick={clearChat} className="w-12 h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all" title="Clear Chat">
+              <Trash2 className="w-5 h-5" />
+            </button>
+
             <div className="w-[1px] h-8 bg-white/20 mx-2" />
 
             <button onClick={endCall} className="w-14 h-14 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
