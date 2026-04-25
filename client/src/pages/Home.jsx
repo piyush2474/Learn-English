@@ -711,16 +711,18 @@ const Home = () => {
     });
 
     let iceRestartCount = 0;
-    let isNegotiating = false;
-
     pc.oniceconnectionstatechange = () => {
       console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         if (iceRestartCount < 2) {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
-          iceRestartCount++;
-          // restartIce() automatically triggers onnegotiationneeded safely.
           pc.restartIce();
+          iceRestartCount++;
+          pc.createOffer({ iceRestart: true }).then(offer => {
+            return pc.setLocalDescription(offer).then(() => {
+              socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
+            });
+          }).catch(e => console.error("ICE Restart signaling failed:", e));
         } else {
           console.warn("WebRTC: Connection failed after retries. A TURN server is required for this network.");
         }
@@ -729,17 +731,12 @@ const Home = () => {
 
     pc.onnegotiationneeded = async () => {
        try {
-         if (isNegotiating || pc.signalingState !== 'stable') return;
-         isNegotiating = true;
-         
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
          socket.emit('call_user', { roomId, signalData: offer, type });
        } catch (err) {
          console.error("Negotiation error:", err);
-       } finally {
-         isNegotiating = false;
        }
     };
 
@@ -755,11 +752,8 @@ const Home = () => {
     };
 
     if (localStream.current) {
-      const senders = pc.getSenders();
       localStream.current.getTracks().forEach(track => {
-        if (!senders.find(s => s.track === track)) {
-          pc.addTrack(track, localStream.current);
-        }
+        pc.addTrack(track, localStream.current);
       });
     }
 
