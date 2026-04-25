@@ -4,6 +4,7 @@ import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
 import LMSDashboard from '../components/stealth/LMSDashboard';
+import VaultGate from '../components/VaultGate';
 import { 
   encryptWithKey, 
   decryptWithKey, 
@@ -69,6 +70,10 @@ const Home = () => {
   const [stealthWord, setStealthWord] = useState(null);
   const [isFetchingWord, setIsFetchingWord] = useState(false);
   const [isMirrored, setIsMirrored] = useState(true);
+  const [isVaultEnabled, setIsVaultEnabled] = useState(false);
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+  const [showVaultGate, setShowVaultGate] = useState(null); // 'verify' | 'setup' | null
+  const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -455,6 +460,31 @@ const Home = () => {
       setNameInput(data.name || 'Stranger');
       setFriends(data.friends || []);
       setFriendRequests(data.pendingRequests || []);
+      setIsVaultEnabled(data.isVaultEnabled || false);
+    });
+
+    socket.on('vault_status', (data) => {
+      if (data.isVaultEnabled !== undefined) setIsVaultEnabled(data.isVaultEnabled);
+      if (data.success) {
+        setShowVaultGate(null);
+        if (data.message) alert(data.message);
+      } else if (data.error) {
+        alert(data.error);
+      }
+    });
+
+    socket.on('vault_verify_result', (data) => {
+      if (data.success) {
+        setIsVaultUnlocked(true);
+        setShowVaultGate(null);
+        if (pendingPrivateChatId) {
+          socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
+          setPendingPrivateChatId(null);
+          setMessages([]);
+        }
+      } else {
+        window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
+      }
     });
 
     socket.on('friend_status_update', (data) => {
@@ -961,8 +991,21 @@ const Home = () => {
 
   const startPrivateChat = (friendId) => {
     endCall();
-    socket.emit("start_private_chat", { friendId });
-    setMessages([]);
+    if (isVaultEnabled && !isVaultUnlocked) {
+      setPendingPrivateChatId(friendId);
+      setShowVaultGate('verify');
+    } else {
+      socket.emit("start_private_chat", { friendId });
+      setMessages([]);
+    }
+  };
+
+  const handleSetVaultPin = (pin) => {
+    socket.emit('set_vault_password', { password: pin });
+  };
+
+  const handleVerifyVaultPin = (pin) => {
+    socket.emit('verify_vault_password', { password: pin });
   };
 
   const clearChat = () => {
@@ -1516,6 +1559,53 @@ const Home = () => {
                   </div>
                 </div>
 
+                <div className="pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Security & Vault</h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Private Chat Vault</h4>
+                        <p className="text-[10px] text-gray-400">Lock friend list and history</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (!isVaultEnabled) {
+                            setShowVaultGate('setup');
+                          } else {
+                            const pass = prompt("Enter PIN to disable vault:");
+                            if (pass) socket.emit('toggle_vault', { enabled: false, password: pass });
+                          }
+                        }}
+                        className={`w-12 h-6 rounded-full transition-all relative ${isVaultEnabled ? 'bg-green-600' : 'bg-gray-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isVaultEnabled ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    {isVaultEnabled && (
+                      <button 
+                        onClick={() => {
+                          const old = prompt("Enter old PIN:");
+                          if (old) {
+                            const newP = prompt("Enter new 4-digit PIN:");
+                            if (newP && newP.length === 4) {
+                              socket.emit('change_vault_password', { oldPassword: old, newPassword: newP });
+                            } else {
+                              alert("PIN must be 4 digits");
+                            }
+                          }
+                        }}
+                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/5 transition-colors"
+                      >
+                        Change Vault PIN
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <button 
                   onClick={updateProfile}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-4 transition-colors"
@@ -1617,6 +1707,19 @@ const Home = () => {
             Tap anywhere to close
           </div>
         </div>
+      )}
+
+      {/* Vault Modal */}
+      {showVaultGate && (
+        <VaultGate 
+          mode={showVaultGate}
+          onClose={() => {
+            setShowVaultGate(null);
+            setPendingPrivateChatId(null);
+          }}
+          onUnlock={handleVerifyVaultPin}
+          onSetPassword={handleSetVaultPin}
+        />
       )}
     </div>
   );

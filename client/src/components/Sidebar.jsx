@@ -79,15 +79,13 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                 <div 
                   key={i} 
                   onClick={() => {
-                    if (friend.isOnline) {
-                      onSelectFriend(friend.userId);
-                      onClose();
-                    }
+                    onSelectFriend(friend.userId);
+                    onClose();
                   }}
                   className={`group relative px-3 py-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all border border-transparent hover:border-white/5 ${
                     friend.isOnline 
                       ? 'hover:bg-white/5 active:scale-95' 
-                      : 'opacity-60 grayscale-[0.5]'
+                      : 'hover:bg-white/5 opacity-60 grayscale-[0.5]'
                   }`}
                 >
                   <div className="relative">

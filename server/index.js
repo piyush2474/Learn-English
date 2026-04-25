@@ -8,6 +8,7 @@ const User = require("./models/User");
 const Message = require("./models/Message");
 const { handleMatchmaking, removeFromQueue } = require("./socket/matchmaking");
 const nodemailer = require("nodemailer");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 // --- Email Configuration ---
@@ -176,7 +177,8 @@ io.on("connection", (socket) => {
       socket.emit("init_data", { 
         name: freshUser.name || "Stranger",
         friends: friendsData,
-        pendingRequests: freshUser.pendingRequests 
+        pendingRequests: freshUser.pendingRequests,
+        isVaultEnabled: freshUser.isVaultEnabled || false
       });
     }
   });
@@ -375,39 +377,111 @@ io.on("connection", (socket) => {
     const { friendId } = data;
     if (!socket.userId || !friendId) return;
 
+    const roomId = `private_${[socket.userId, friendId].sort().join("_")}`;
     const partnerEntry = onlineUsers.get(friendId);
-    if (!partnerEntry) {
-      socket.emit("error", { message: "Friend is offline" });
+    
+    socket.join(roomId);
+    
+    // Initialize room state if not exists
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, {
+        users: new Set([socket.userId, friendId]),
+        sockets: new Map()
+      });
+    }
+
+    const room = rooms.get(roomId);
+    room.sockets.set(socket.userId, socket.id);
+    onlineUsers.set(socket.userId, { socketId: socket.id, status: 'busy', roomId });
+    broadcastStatusUpdate(socket.userId, true, socket);
+
+    // If partner is online, bring them into the room
+    if (partnerEntry) {
+      const partnerSocket = io.sockets.sockets.get(partnerEntry.socketId);
+      if (partnerSocket) {
+        partnerSocket.join(roomId);
+        room.sockets.set(friendId, partnerEntry.socketId);
+        onlineUsers.set(friendId, { ...partnerEntry, status: 'busy', roomId });
+        broadcastStatusUpdate(friendId, true, socket);
+      }
+    }
+
+    socket.emit("matched", { roomId, isPrivate: true, partnerUserId: friendId });
+
+    Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
+      socket.emit("chat_history", history);
+    });
+  });
+
+  // --- Vault Handlers ---
+  socket.on("set_vault_password", async (data) => {
+    const { password } = data;
+    if (!socket.userId || !password) return;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await User.findOneAndUpdate(
+      { userId: socket.userId },
+      { vaultPassword: hashedPassword, isVaultEnabled: true }
+    );
+    socket.emit("vault_status", { isVaultEnabled: true, message: "Vault enabled successfully" });
+  });
+
+  socket.on("verify_vault_password", async (data) => {
+    const { password } = data;
+    if (!socket.userId || !password) return;
+
+    const user = await User.findOne({ userId: socket.userId });
+    if (!user || !user.vaultPassword) {
+      socket.emit("vault_verify_result", { success: false, error: "Vault not setup" });
       return;
     }
 
-    const roomId = `private_${[socket.userId, friendId].sort().join("_")}`;
-    
-    socket.join(roomId);
-    const partnerSocket = io.sockets.sockets.get(partnerEntry.socketId);
-    if (partnerSocket) {
-      partnerSocket.join(roomId);
+    const match = await bcrypt.compare(password, user.vaultPassword);
+    socket.emit("vault_verify_result", { success: match });
+  });
+
+  socket.on("change_vault_password", async (data) => {
+    const { oldPassword, newPassword } = data;
+    if (!socket.userId || !oldPassword || !newPassword) return;
+
+    const user = await User.findOne({ userId: socket.userId });
+    if (!user || !user.vaultPassword) {
+      socket.emit("vault_status", { success: false, error: "Vault not setup" });
+      return;
     }
 
-    rooms.set(roomId, {
-      users: new Set([socket.userId, friendId]),
-      sockets: new Map([
-        [socket.userId, socket.id],
-        [friendId, partnerEntry.socketId]
-      ])
-    });
+    const match = await bcrypt.compare(oldPassword, user.vaultPassword);
+    if (!match) {
+      socket.emit("vault_status", { success: false, error: "Incorrect old password" });
+      return;
+    }
 
-    onlineUsers.set(socket.userId, { socketId: socket.id, status: 'busy', roomId });
-    onlineUsers.set(friendId, { ...partnerEntry, status: 'busy', roomId });
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate(
+      { userId: socket.userId },
+      { vaultPassword: hashedPassword }
+    );
+    socket.emit("vault_status", { success: true, message: "Password changed successfully" });
+  });
 
-    broadcastStatusUpdate(socket.userId, true, socket);
-    broadcastStatusUpdate(friendId, true, socket);
+  socket.on("toggle_vault", async (data) => {
+    const { enabled, password } = data;
+    if (!socket.userId) return;
 
-    io.to(roomId).emit("matched", { roomId, isPrivate: true });
+    const user = await User.findOne({ userId: socket.userId });
+    if (!user) return;
 
-    Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
-      io.to(roomId).emit("chat_history", history);
-    });
+    // Must verify password to toggle off
+    if (!enabled && user.vaultPassword) {
+      const match = await bcrypt.compare(password, user.vaultPassword);
+      if (!match) {
+        socket.emit("vault_status", { success: false, error: "Incorrect password" });
+        return;
+      }
+    }
+
+    await User.findOneAndUpdate({ userId: socket.userId }, { isVaultEnabled: enabled });
+    socket.emit("vault_status", { success: true, isVaultEnabled: enabled });
   });
 
 
