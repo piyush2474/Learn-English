@@ -579,21 +579,11 @@ const Home = () => {
       setCallType(data.type || 'audio');
     });
 
-    socket.on('call_accepted', async (signal) => {
+    socket.on('call_accepted', async (data) => {
+      setCallAccepted(true);
       if (peerConnection.current) {
-        // Signaling Guard: Only set remote description if we have a local offer pending
-        if (peerConnection.current.signalingState !== 'have-local-offer') {
-          console.warn("WebRTC: Received answer but signalingState is", peerConnection.current.signalingState);
-          return;
-        }
         try {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-          setCallAccepted(true);
-          // Process queued candidates
-          while (iceCandidatesQueue.current.length > 0) {
-            const candidate = iceCandidatesQueue.current.shift();
-            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-          }
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.signal));
         } catch (err) {
           console.error("Error setting remote description:", err);
         }
@@ -604,15 +594,15 @@ const Home = () => {
       endCall();
     });
 
-    socket.on('ice_candidate', async (candidate) => {
+    socket.on('ice_candidate', async (data) => {
       try {
         if (peerConnection.current && peerConnection.current.remoteDescription) {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate));
         } else {
-          iceCandidatesQueue.current.push(candidate);
+          iceCandidatesQueue.current.push(data.candidate);
         }
       } catch (err) {
-        console.error("Error adding ICE candidate:", err);
+        console.error("Error adding ice candidate:", err);
       }
     });
 
@@ -708,13 +698,11 @@ const Home = () => {
   };
 
   const createPeerConnection = (roomId, type) => {
-    if (peerConnection.current && peerConnection.current.signalingState !== 'closed') {
-      return peerConnection.current;
-    }
-
     const pc = new RTCPeerConnection({ 
       iceServers,
       iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     });
 
     let iceRestartCount = 0;
@@ -725,7 +713,6 @@ const Home = () => {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
           pc.restartIce();
           iceRestartCount++;
-          // We must re-signaling the new offer for ICE restart to work
           pc.createOffer({ iceRestart: true }).then(offer => {
             return pc.setLocalDescription(offer).then(() => {
               socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
@@ -739,15 +726,10 @@ const Home = () => {
 
     pc.onnegotiationneeded = async () => {
        try {
-         // Perfect Negotiation: Prevent collision if we are currently handling an offer
-         if (pc.signalingState !== 'stable') return;
-         
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
-         if (pc.signalingState !== 'stable') return;
-         
          await pc.setLocalDescription(offer);
-         socket.emit('call_user', { roomId, signalData: pc.localDescription, type });
+         socket.emit('call_user', { roomId, signalData: offer, type });
        } catch (err) {
          console.error("Negotiation error:", err);
        }
@@ -761,23 +743,12 @@ const Home = () => {
 
     pc.ontrack = (event) => {
       console.log("WebRTC: Remote track received", event.track.kind);
-      const stream = event.streams[0];
-      setRemoteStream(stream);
-
-      // Instant Media Attachment
-      if (event.track.kind === 'video' && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
-        remoteVideoRef.current.play().catch(e => console.error("Video instant play failed", e));
-      }
-      if (event.track.kind === 'audio' && remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.play().catch(e => console.error("Audio instant play failed", e));
-      }
+      setRemoteStream(event.streams[0]);
     };
 
     if (localStream.current) {
       localStream.current.getTracks().forEach(track => {
-        pc.addTransceiver(track, { streams: [localStream.current] });
+        pc.addTrack(track, localStream.current);
       });
     }
 
