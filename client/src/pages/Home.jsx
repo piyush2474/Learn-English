@@ -474,13 +474,16 @@ const Home = () => {
 
     socket.on('vault_verify_result', (data) => {
       if (data.success) {
-        setIsVaultUnlocked(true);
-        setShowVaultGate(null);
-        if (pendingPrivateChatId) {
-          socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
-          setPendingPrivateChatId(null);
-          setMessages([]);
-        }
+        // Allow time for the high-tech 'Verifying' animation
+        setTimeout(() => {
+          setIsVaultUnlocked(true);
+          setShowVaultGate(null);
+          if (pendingPrivateChatId) {
+            socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
+            setPendingPrivateChatId(null);
+            setMessages([]);
+          }
+        }, 1200);
       } else {
         window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
       }
@@ -597,9 +600,20 @@ const Home = () => {
       socket.off('message_deleted');
       socket.off('chat_cleared');
       socket.off('partner_uploading_media');
-      // socket.disconnect(); // REMOVED: Keep connection stable
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [myUserId]); 
+  }, [myUserId, friends, pendingPrivateChatId]);
+
+  // Auto-Lock when tab loses focus
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      setIsVaultUnlocked(false);
+    }
+  };
+  useEffect(() => {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const startAudioAnalysis = (stream) => {
     const context = new (window.AudioContext || window.webkitAudioContext)();
@@ -991,7 +1005,10 @@ const Home = () => {
 
   const startPrivateChat = (friendId) => {
     endCall();
-    if (isVaultEnabled && !isVaultUnlocked) {
+    // Always lock before opening a new chat for Ultra-Security
+    setIsVaultUnlocked(false);
+    
+    if (isVaultEnabled) {
       setPendingPrivateChatId(friendId);
       setShowVaultGate('verify');
     } else {
