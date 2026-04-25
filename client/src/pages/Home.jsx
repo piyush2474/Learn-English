@@ -3,7 +3,6 @@ import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Vo
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
-import LMSDashboard from '../components/stealth/LMSDashboard';
 import VaultGate from '../components/VaultGate';
 import { 
   encryptWithKey, 
@@ -78,6 +77,7 @@ const Home = () => {
   const [mainView, setMainView] = useState('remote'); // 'remote' or 'local'
   const [showVcChat, setShowVcChat] = useState(true);
   const [facingMode, setFacingMode] = useState('user'); // 'user' or 'environment'
+  const [unreadCounts, setUnreadCounts] = useState({});
   
   const peerConnection = useRef(null);
   const localStream = useRef(null);
@@ -88,17 +88,15 @@ const Home = () => {
 
   // --- Stealth Mode Metadata & Call Suppression ---
   useEffect(() => {
-    const originalTitle = "Learn English - Chat";
+    const originalTitle = "Elite Chat";
     
     if (isStealthMode) {
-      document.title = "English Prep - Vocabulary Builder";
+      document.title = "System Task Manager";
       // Mute and silence if in a call
       if (isCalling || callAccepted) {
         setIsMicMuted(true);
         if (remoteAudioRef.current) remoteAudioRef.current.muted = true;
       }
-      // Initial fetch if empty
-      if (!stealthWord) fetchNewWord();
     } else {
       document.title = originalTitle;
       if (remoteAudioRef.current) remoteAudioRef.current.muted = false;
@@ -411,11 +409,19 @@ const Home = () => {
     });
 
     socket.on('receive_message', async (data) => {
+      if (data.roomId !== roomIdRef.current) {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [data.senderId]: (prev[data.senderId] || 0) + 1
+        }));
+      }
+
       let displayMessage = data.message;
       let rawContent = data.message;
       if (sharedKeyRef.current) {
         try {
           displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
+          rawContent = displayMessage;
         } catch (e) {
           displayMessage = "[Encrypted Message]";
         }
@@ -1039,11 +1045,12 @@ const Home = () => {
   };
 
   const startPrivateChat = (friendId) => {
+    setUnreadCounts(prev => ({ ...prev, [friendId]: 0 }));
     endCall();
-    // Always lock before opening a new chat for Ultra-Security
+    
+    // Lock vault to protect privacy
     setIsVaultUnlocked(false);
     
-    // Only show vault if the CURRENT user has it enabled
     if (isVaultEnabled) {
       setPendingPrivateChatId(friendId);
       setShowVaultGate('verify');
@@ -1092,21 +1099,6 @@ const Home = () => {
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit('typing', { roomId, isTyping: false });
     }, 2000);
-  };
-
-  const toggleStealth = () => {
-    const nextStealth = !isStealthMode;
-    
-    if (nextStealth) {
-      // Panic Clear: Wipe everything immediately for stealth
-      if (roomId) {
-        socket.emit('clear_chat', { roomId });
-        setMessages([]);
-        setSharedKey(null);
-      }
-    }
-    
-    setIsStealthMode(nextStealth);
   };
 
   return (
@@ -1242,28 +1234,6 @@ const Home = () => {
         </div>
       )}
       
-      {/* Interactive Stealth Mode Overlay (Fixed Fullscreen) */}
-      {isStealthMode && (
-        <div className="fixed inset-0 z-[300] bg-[#121212] flex flex-col animate-in fade-in duration-500">
-          <div 
-            className="h-14 bg-[#0a0a0a] border-b border-white/[0.02] flex items-center justify-between px-6 shrink-0 cursor-pointer select-none"
-            onDoubleClick={toggleStealth}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">Academic Portal Access v4.2</span>
-            </div>
-            <CloseIcon className="w-4 h-4 text-gray-700 hover:text-white transition-colors" onClick={toggleStealth} />
-          </div>
-
-          <LMSDashboard 
-            isFetchingWord={isFetchingWord} 
-            stealthWord={stealthWord} 
-            fetchNewWord={fetchNewWord} 
-          />
-        </div>
-      )}
-
       {/* Incoming Call Modal */}
       {isReceivingCall && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -1343,11 +1313,9 @@ const Home = () => {
         onSelectFriend={startPrivateChat}
         onRemoveFriend={removeFriend}
         onInform={() => setIsInformModalOpen(true)}
-        onOpenSettings={() => {
-          setNameInput(myName);
-          setIsSettingsOpen(true);
-        }}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         currentRoomId={roomId}
+        unreadCounts={unreadCounts}
       />
 
       {/* Main Content Area */}
@@ -1365,7 +1333,6 @@ const Home = () => {
         )}
         {/* Header (Fixed height) */}
         <header 
-          onDoubleClick={toggleStealth}
           className="h-[60px] shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#212121] z-30 cursor-pointer select-none"
         >
           <div className="flex items-center gap-3">
@@ -1376,10 +1343,10 @@ const Home = () => {
               <Menu className="w-6 h-6 text-gray-400" />
             </button>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">
+              <span className="text-sm font-bold text-white truncate max-w-[150px]">
                 {status === 'Matched' && partnerUserId 
                   ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger')
-                  : 'Learn English'}
+                  : 'Elite Chat'}
               </span>
               {status === 'Matched' ? (
                 (() => {

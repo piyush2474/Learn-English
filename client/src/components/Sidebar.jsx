@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, MessageSquare, Globe, LogOut, X, Tv, UserRound, Trash2, Info, Settings } from 'lucide-react';
 
-const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform, onOpenSettings, currentRoomId }) => {
+const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, onStartCall, isCalling, callAccepted, friends = [], onSelectFriend, onRemoveFriend, onInform, onOpenSettings, currentRoomId, unreadCounts = {} }) => {
   
   const formatLastSeen = (date) => {
     if (!date) return 'Offline';
@@ -44,7 +44,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
             className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all group"
           >
             <Plus className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-300" />
-            <span className="text-[14px] font-semibold text-white">New Practice Chat</span>
+            <span className="text-[14px] font-semibold text-white">Start New Chat</span>
           </button>
           
           <button 
@@ -62,16 +62,16 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
           </div>
           <div className="px-3 py-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <MessageSquare className="w-4 h-4 text-blue-400" />
+              <Globe className="w-4 h-4 text-blue-400" />
             </div>
-            <span className="text-[13px] font-medium text-gray-200 truncate">Global English Chat</span>
+            <span className="text-[13px] font-medium text-gray-200 truncate">Global Community</span>
           </div>
         </div>
 
         {friends.length > 0 && (
           <div className="space-y-1">
             <div className="text-[11px] font-bold text-gray-500 px-3 py-2 uppercase tracking-widest flex justify-between items-center">
-              <span>My English Notes</span>
+              <span>Friends</span>
               <span className="bg-white/5 px-2 py-0.5 rounded-full text-[9px]">{friends.length}</span>
             </div>
             <div className="space-y-1">
@@ -109,15 +109,20 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                       <span className="text-[13px] font-semibold text-gray-100 truncate">
                         {friend.name || 'Stranger'}
                       </span>
+                      {unreadCounts[friend.userId] > 0 && (
+                        <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)] animate-bounce">
+                          {unreadCounts[friend.userId]}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
                       {friend.isOnline ? (
                         friend.roomId === currentRoomId ? (
-                          <span className="text-blue-400 font-bold animate-pulse">Practicing with you</span>
+                          <span className="text-blue-400 font-bold animate-pulse">In chat with you</span>
                         ) : friend.activity === 'busy' ? (
-                          <span className="text-orange-400 font-medium italic">In another conversation</span>
+                          <span className="text-orange-400 font-medium italic">In a call</span>
                         ) : (
-                          <span className="text-green-500 font-medium">Available to Practice</span>
+                          <span className="text-green-500 font-medium">Online</span>
                         )
                       ) : (
                         <span>Active {formatLastSeen(friend.lastActive)}</span>
@@ -147,7 +152,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
             <div className="w-2.5 h-2.5 rounded-full bg-green-500 absolute" />
           </div>
           <span className="text-[12px] font-bold text-gray-400 tracking-widest uppercase">
-            {Math.max(0, userCount - 1)} Learners Live
+            {Math.max(0, userCount - 1)} Users Online
           </span>
         </div>
       </div>
