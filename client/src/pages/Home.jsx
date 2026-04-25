@@ -313,32 +313,58 @@ const Home = () => {
       sessionStorage.removeItem('current_room_id');
     });
 
+    // Cleaned up core socket listeners
     socket.on('matched', async (data) => {
       setRoomId(data.roomId);
+      roomIdRef.current = data.roomId;
       setStatus('Matched');
-      setMessages([]); // Clear previous chat
+      setMessages([]);
       setPartnerUserId(data.partnerUserId);
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        const otherUserId = data.roomId.replace('private_', '').replace(myUserId, '').replace('_', '');
+        const id = localStorage.getItem('chat_user_id');
+        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
         const friend = friends.find(f => f.userId === otherUserId);
-        if (friend) {
-          setPartnerName(friend.name);
-        } else {
-          setPartnerName('Friend');
-        }
-        // Mark seen for private rooms
-        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
+        if (friend) setPartnerName(friend.name);
+        else setPartnerName('Friend');
       } else {
         setPartnerName('Stranger');
       }
 
-      // Send our public key to the partner
       if (myKeyPairRef.current) {
         const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
         socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
       }
+    });
+
+    socket.on('rejoined', async (data) => {
+      setStatus('Matched');
+      setRoomId(data.roomId);
+      roomIdRef.current = data.roomId;
+      setPartnerUserId(data.partnerUserId);
+      
+      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
+      if (savedKey) {
+        try {
+          const key = await importSharedKey(savedKey);
+          setSharedKey(key);
+          sharedKeyRef.current = key;
+        } catch (e) { console.error("Failed to restore shared key", e); }
+      }
+      
+      const currentId = localStorage.getItem('chat_user_id');
+      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
+
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
+        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
+      }
+    });
+
+    socket.on('rejoin_failed', () => {
+      sessionStorage.removeItem('current_room_id');
+      setStatus('Idle');
     });
 
     socket.on('exchange_keys', async (data) => {
@@ -346,8 +372,6 @@ const Home = () => {
         const partnerPubKey = await importPublicKey(data.publicKey);
         const shared = await deriveSharedSecret(myKeyPairRef.current.privateKey, partnerPubKey);
         setSharedKey(shared);
-        
-        // Persist key immediately
         if (roomIdRef.current) {
           const exported = await exportSharedKey(shared);
           localStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
@@ -367,7 +391,6 @@ const Home = () => {
           }
         }));
       };
-
       if (storedKey) {
         try {
           const key = await importSharedKey(storedKey);
@@ -382,26 +405,18 @@ const Home = () => {
       }
     });
 
-    socket.on('messages_marked_seen', (data) => {
-      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
-    });
-
     socket.on('receive_message', async (data) => {
       let displayMessage = data.message;
       let rawContent = data.message;
-
       if (sharedKeyRef.current) {
         try {
           displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
         } catch (e) {
-          console.error("Decryption failed:", e);
           displayMessage = "[Encrypted Message]";
         }
       } else {
         displayMessage = "[Encrypted Message]";
       }
-
-      // If it's an image, convert to Blob URL for privacy
       if (data.type === 'image' && displayMessage !== "[Encrypted Message]" && displayMessage.startsWith('data:')) {
         try {
           const res = await fetch(displayMessage);
@@ -409,67 +424,27 @@ const Home = () => {
           displayMessage = URL.createObjectURL(blob);
         } catch (e) { console.error("Blob conversion failed", e); }
       }
-
       setMessages((prev) => [...prev, { ...data, message: displayMessage, rawContent }]);
       setIsPartnerTyping(false);
-      
-      // Mark as seen if we are in this room
       if (roomIdRef.current === data.roomId) {
         socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
       }
-    });
-
-    socket.on('message_deleted', (data) => {
-      const { messageId } = data;
-      setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
-    });
-
-    socket.on('chat_cleared', () => {
-      setMessages([]);
     });
 
     socket.on('typing', (data) => {
       setIsPartnerTyping(data.isTyping);
     });
 
-    socket.on('friend_added', (data) => {
-      setFriends(prev => {
-        const exists = prev.find(f => f.userId === data.userId);
-        if (exists) return prev;
-        return [...prev, { 
-          userId: data.userId, 
-          name: data.name, 
-          isOnline: data.isOnline,
-          avatarColor: data.avatarColor,
-          lastActive: data.lastActive
-        }];
-      });
-      setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
+    socket.on('message_deleted', (data) => {
+      setMessages((prev) => prev.filter(msg => msg.messageId !== data.messageId));
     });
 
-    socket.on('incoming_friend_request', (data) => {
-      setFriendRequests(prev => [...prev, data]);
+    socket.on('chat_cleared', () => {
+      setMessages([]);
     });
 
-    socket.on('friend_removed', (data) => {
-      setFriends(prev => prev.filter(f => f.userId !== data.userId));
-    });
-
-    socket.on('init_data', (data) => {
-      setMyName(data.name || 'Stranger');
-      setNameInput(data.name || 'Stranger');
-      setFriends(data.friends || []);
-      setFriendRequests(data.pendingRequests || []);
-      setIsVaultEnabled(data.isVaultEnabled || false);
-    });
-
-    socket.on('vault_status', (data) => {
-      if (data.isVaultEnabled !== undefined) setIsVaultEnabled(data.isVaultEnabled);
-      if (data.success) {
-        setShowVaultGate(null);
-      } else if (data.error) {
-        alert(data.error);
-      }
+    socket.on('messages_marked_seen', () => {
+      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
     });
 
     socket.on('vault_verify_result', (data) => {
@@ -524,48 +499,9 @@ const Home = () => {
       endCall();
     });
 
-    // --- WebRTC Listeners ---
-    socket.on('incoming_call', (data) => {
-      setIsReceivingCall(true);
-      setIncomingSignal(data.signal);
-      setCallType(data.type || 'audio');
-    });
-
-    socket.on('call_accepted', async (signal) => {
-      if (peerConnection.current) {
-        try {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-          setCallAccepted(true);
-          // Process queued candidates
-          while (iceCandidatesQueue.current.length > 0) {
-            const candidate = iceCandidatesQueue.current.shift();
-            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-          }
-        } catch (err) {
-          console.error("Error setting remote description:", err);
-        }
-      }
-    });
-
-    socket.on('call_ended', () => {
-      endCall();
-    });
-
-    socket.on('ice_candidate', async (candidate) => {
-      try {
-        if (peerConnection.current && peerConnection.current.remoteDescription) {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } else {
-          iceCandidatesQueue.current.push(candidate);
-        }
-      } catch (err) {
-        console.error("Error adding ice candidate:", err);
-      }
-    });
-
     socket.on('partner_uploading_media', (data) => {
       setPartnerMediaStatus(data.type);
-      setTimeout(() => setPartnerMediaStatus(null), 15000); // Auto-clear after 15s
+      setTimeout(() => setPartnerMediaStatus(null), 15000);
     });
     // ----------------------
 
@@ -597,9 +533,10 @@ const Home = () => {
       socket.off('message_deleted');
       socket.off('chat_cleared');
       socket.off('partner_uploading_media');
+      socket.off('vault_verify_result');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [myUserId, pendingPrivateChatId]); // Removed friends from dependencies to ensure stability
+  }, [myUserId, pendingPrivateChatId]);
 
   // --- STABLE WebRTC Signaling & Connection Persistence ---
   // Define visibility handler before useEffect to avoid ReferenceError
@@ -794,7 +731,18 @@ const Home = () => {
 
     pc.ontrack = (event) => {
       console.log("WebRTC: Remote track received", event.track.kind);
-      setRemoteStream(event.streams[0]);
+      const stream = event.streams[0];
+      setRemoteStream(stream);
+
+      // Instant Media Attachment
+      if (event.track.kind === 'video' && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
+        remoteVideoRef.current.play().catch(e => console.error("Video instant play failed", e));
+      }
+      if (event.track.kind === 'audio' && remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.play().catch(e => console.error("Audio instant play failed", e));
+      }
     };
 
     if (localStream.current) {
