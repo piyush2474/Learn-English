@@ -1,10 +1,15 @@
 import React from 'react';
 import Home from './pages/Home';
+import PasswordGate from './components/PasswordGate';
 
 function App() {
   return (
-    <Home />
+    <PasswordGate>
+      <Home />
+    </PasswordGate>
   );
 }
+
+export default App;
 
 export default App;
