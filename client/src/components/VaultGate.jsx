@@ -44,7 +44,8 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
         setIsSuccess(true);
         setTimeout(() => {
           onSetPassword(pin);
-        }, 1500);
+          if (onClose) onClose(); // Snappy redirect after animation
+        }, 1000);
       } else {
         triggerError('PINs do not match');
         setConfirmPin('');

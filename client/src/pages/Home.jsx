@@ -1002,6 +1002,7 @@ const Home = () => {
 
   const handleSetVaultPin = (pin) => {
     socket.emit('set_vault_password', { password: pin });
+    setIsVaultUnlocked(true); // Automatically unlock since user just created it
   };
 
   const handleVerifyVaultPin = (pin) => {
