@@ -474,16 +474,13 @@ const Home = () => {
 
     socket.on('vault_verify_result', (data) => {
       if (data.success) {
-        // Allow time for the high-tech 'Verifying' animation
-        setTimeout(() => {
-          setIsVaultUnlocked(true);
-          setShowVaultGate(null);
-          if (pendingPrivateChatId) {
-            socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
-            setPendingPrivateChatId(null);
-            setMessages([]);
-          }
-        }, 1200);
+        setIsVaultUnlocked(true);
+        setShowVaultGate(null);
+        if (pendingPrivateChatId) {
+          socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
+          setPendingPrivateChatId(null);
+          setMessages([]);
+        }
       } else {
         window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
       }

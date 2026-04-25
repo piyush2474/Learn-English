@@ -8,10 +8,9 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   const [step, setStep] = useState(mode === 'setup' ? 'create' : 'verify'); 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleKeyPress = (num) => {
-    if (isSuccess || isVerifying) return;
+    if (isSuccess) return;
     if (step === 'create' || step === 'verify') {
       if (pin.length < 4) {
         setPin(prev => prev + num);
@@ -26,7 +25,7 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   };
 
   const handleBackspace = () => {
-    if (isSuccess || isVerifying) return;
+    if (isSuccess) return;
     if (step === 'create' || step === 'verify') {
       setPin(prev => prev.slice(0, -1));
     } else {
@@ -52,13 +51,11 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
         setConfirmPin('');
       }
     } else if (step === 'verify') {
-      setIsVerifying(true);
       onUnlock(pin);
     }
   };
 
   const triggerError = (msg) => {
-    setIsVerifying(false);
     setError(msg);
     setIsAnimating(true);
     setTimeout(() => setIsAnimating(false), 500);
@@ -72,19 +69,6 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   }, []);
 
   const currentPin = step === 'confirm' ? confirmPin : pin;
-
-  if (isVerifying) {
-    return (
-      <div className="fixed inset-0 z-[2000] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
-        <div className="w-20 h-20 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center mb-8 relative">
-          <RefreshCw className="w-10 h-10 text-blue-500 animate-spin" />
-          <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse" />
-        </div>
-        <h2 className="text-xl font-black text-white mb-2 tracking-widest uppercase">Verifying</h2>
-        <p className="text-gray-500 text-xs text-center font-bold tracking-widest animate-pulse">Establishing Secure Session...</p>
-      </div>
-    );
-  }
 
   if (isSuccess) {
     return (
