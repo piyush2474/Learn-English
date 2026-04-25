@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap, LogOut } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap, LogOut, MessageCircle, Maximize2 } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -74,6 +74,11 @@ const Home = () => {
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [showVaultGate, setShowVaultGate] = useState(null); // 'verify' | 'setup' | null
   const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
+  const [isPipMode, setIsPipMode] = useState(true);
+  const [mainView, setMainView] = useState('remote'); // 'remote' or 'local'
+  const [showVcChat, setShowVcChat] = useState(true);
+  const [facingMode, setFacingMode] = useState('user'); // 'user' or 'environment'
+  
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -728,7 +733,31 @@ const Home = () => {
   };
 
   const switchCamera = async () => {
-    alert("Switching camera...");
+    if (!localStream.current) return;
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    
+    try {
+      const oldTrack = localStream.current.getVideoTracks()[0];
+      if (oldTrack) oldTrack.stop();
+      
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newMode } });
+      const newTrack = newStream.getVideoTracks()[0];
+      
+      localStream.current.removeTrack(oldTrack);
+      localStream.current.addTrack(newTrack);
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStream.current;
+      }
+      
+      if (peerConnection.current) {
+        const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) sender.replaceTrack(newTrack);
+      }
+    } catch (e) {
+      console.error("Camera switch failed:", e);
+    }
   };
 
   const startCall = async (type = 'audio') => {
@@ -739,7 +768,7 @@ const Home = () => {
 
       const constraints = { 
         audio: true, 
-        video: type === 'video' 
+        video: type === 'video' ? { facingMode } : false
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -776,7 +805,7 @@ const Home = () => {
 
       const constraints = { 
         audio: true, 
-        video: type === 'video' 
+        video: type === 'video' ? { facingMode } : false
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -1087,119 +1116,139 @@ const Home = () => {
 
       {/* Video Call Overlay */}
       {isVideoCall && (
-        <div className="fixed inset-0 z-[150] bg-black flex flex-col md:flex-row animate-in fade-in duration-500 overflow-hidden">
-          {/* Section: Partner Video / Connecting State */}
-          <div className="relative flex-1 bg-[#171717] border-b md:border-b-0 md:border-r border-white/5 overflow-hidden">
-            {!callAccepted ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-4">
-                <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
-                <div>
-                  <h3 className="text-xl font-bold text-white mb-1">Connecting Video</h3>
-                  <p className="text-sm text-gray-400">Establishing secure connection...</p>
+        <div className="fixed inset-0 z-[150] bg-[#111] overflow-hidden animate-in fade-in duration-500">
+          
+          {/* Main Background Video */}
+          <div className="absolute inset-0">
+            {mainView === 'remote' ? (
+              !callAccepted ? (
+                <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 space-y-4 bg-[#171717]">
+                  <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-1">Connecting Video</h3>
+                    <p className="text-sm text-gray-400">Establishing secure connection...</p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+              )
             ) : (
               <video 
-                ref={remoteVideoRef} 
+                ref={localVideoRef} 
                 autoPlay 
                 playsInline 
-                className="w-full h-full object-cover"
+                muted 
+                className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
               />
             )}
-            {/* Overlay Info (Top Left) */}
-            <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-[12px] font-medium text-white">Stranger</span>
-            </div>
-          </div>
-
-          {/* Section: Self Video */}
-          <div className="relative flex-1 bg-[#1a1a1a] overflow-hidden">
-            <video 
-              ref={localVideoRef} 
-              autoPlay 
-              playsInline 
-              muted 
-              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored ? '-scale-x-100' : ''}`}
-            />
-            {isCameraOff && (
+            
+            {/* Camera Off Placeholder for Main View */}
+            {mainView === 'local' && isCameraOff && (
               <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
-                <VideoOff className="w-10 h-10 text-gray-500" />
+                <VideoOff className="w-16 h-16 text-gray-500" />
               </div>
             )}
-            
-            {/* Live Chat Overlay (on top of videos) */}
-            <div className="absolute inset-x-0 bottom-[80px] top-0 pointer-events-none flex flex-col justify-end px-4 py-6">
-              <div 
-                ref={vcChatRef}
-                className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto scrollbar-hide"
-              >
-                {messages.slice(-6).map((msg) => {
+          </div>
+
+          {/* Floating PiP Video (Draggable/Clickable) */}
+          <div 
+            className="absolute top-6 right-6 w-32 h-48 md:w-48 md:h-72 bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 cursor-pointer z-40 hover:scale-105 transition-transform"
+            onClick={() => setMainView(mainView === 'remote' ? 'local' : 'remote')}
+          >
+            {mainView === 'local' ? (
+              !callAccepted ? (
+                <div className="w-full h-full flex items-center justify-center bg-[#171717]">
+                  <div className="w-6 h-6 border-2 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+              )
+            ) : (
+              <video 
+                ref={localVideoRef} 
+                autoPlay 
+                playsInline 
+                muted 
+                className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
+              />
+            )}
+            {/* Camera Off Placeholder for PiP */}
+            {mainView === 'remote' && isCameraOff && (
+              <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
+                <VideoOff className="w-8 h-8 text-gray-500" />
+              </div>
+            )}
+          </div>
+
+          {/* Overlay Info (Top Left) */}
+          <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 z-40">
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-[13px] font-medium text-white">{friends.find(f => f.userId === roomId)?.name || partnerName || 'Stranger'}</span>
+          </div>
+
+          {/* Chat Overlay */}
+          {showVcChat && (
+            <div className="absolute bottom-[100px] left-0 w-full md:w-[400px] pointer-events-none flex flex-col justify-end px-4 py-6 z-40 animate-in slide-in-from-left-4 duration-300">
+              <div ref={vcChatRef} className="max-h-[300px] overflow-y-auto space-y-3 pointer-events-auto scrollbar-hide pr-2">
+                {messages.slice(-8).map((msg) => {
                   const isMe = msg.senderId === myUserId;
                   return (
-                    <div key={msg.messageId} className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
-                      <div className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[13px] backdrop-blur-xl border flex flex-col gap-0.5 ${
+                    <div key={msg.messageId} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                      <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] backdrop-blur-xl border flex flex-col gap-1 ${
                         isMe 
-                          ? 'bg-[#10a37f]/40 border-[#10a37f]/40 text-white shadow-[0_4px_12px_rgba(16,163,127,0.2)]' 
-                          : 'bg-[#2f2f2f]/60 border-white/10 text-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.3)]'
+                          ? 'bg-blue-600/80 border-blue-400/30 text-white shadow-[0_8px_16px_rgba(37,99,235,0.2)] rounded-br-sm' 
+                          : 'bg-black/60 border-white/10 text-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.4)] rounded-bl-sm'
                       }`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
+                        <span className={`text-[11px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
                           {isMe ? 'You' : (friends.find(f => f.userId === roomId)?.name || 'Stranger')}
                         </span>
-                        <span className="leading-tight">{msg.message}</span>
+                        <span className="leading-snug">{msg.message}</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-
-            {/* Side Floating Controls */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20">
-              <button 
-                onClick={toggleMic}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${isMicMuted ? 'bg-red-500 text-white' : 'bg-black/40 hover:bg-black/60 text-white border border-white/10'}`}
-              >
-                {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
               
-              <button 
-                onClick={toggleCamera}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${isCameraOff ? 'bg-red-500 text-white' : 'bg-black/40 hover:bg-black/60 text-white border border-white/10'}`}
-              >
-                {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-              </button>
-
-              <button 
-                onClick={switchCamera}
-                className="w-12 h-12 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center shadow-lg border border-white/10 transition-all md:hidden"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-
-              <button 
-                onClick={endCall}
-                className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all"
-              >
-                <CloseIcon className="w-6 h-6" />
-              </button>
+              {/* Chat Input */}
+              <div className="mt-4 pointer-events-auto flex items-center gap-2 bg-black/50 backdrop-blur-xl rounded-full p-1.5 border border-white/10 shadow-xl">
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleSendMessage(e); } }}
+                  className="flex-1 bg-transparent border-none outline-none text-white text-[14px] px-4"
+                />
+                <button onClick={handleSendMessage} className="p-2 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors">
+                  <ArrowUp className="w-5 h-5 text-white" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Integrated Chat Input at bottom */}
-          <div className="bg-[#171717] p-3 border-t border-white/5 flex items-center gap-3">
-            <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/10">
-              <input
-                type="text"
-                placeholder="Type a message..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-white text-[14px]"
-              />
-              <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors">
-                <ArrowUp className="w-4 h-4 text-white" />
-              </button>
-            </form>
+          {/* Bottom Floating Control Bar */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/40 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 z-50 shadow-2xl">
+            <button onClick={toggleMic} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
+              {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            
+            <button onClick={toggleCamera} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
+              {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            </button>
+
+            <button onClick={switchCamera} className="w-12 h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all md:hidden">
+              <RefreshCw className="w-5 h-5" />
+            </button>
+
+            <button onClick={() => setShowVcChat(!showVcChat)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${!showVcChat ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white'}`}>
+              <MessageCircle className="w-5 h-5" />
+            </button>
+
+            <div className="w-[1px] h-8 bg-white/20 mx-2" />
+
+            <button onClick={endCall} className="w-14 h-14 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
+              <PhoneOff className="w-6 h-6" />
+            </button>
           </div>
         </div>
       )}
