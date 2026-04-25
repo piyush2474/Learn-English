@@ -546,10 +546,6 @@ const Home = () => {
       socket.off('rejoined');
       socket.off('partner_rejoined');
       socket.off('rejoin_failed');
-      socket.off('incoming_call');
-      socket.off('call_accepted');
-      socket.off('call_ended');
-      socket.off('ice_candidate');
       socket.off('friend_added');
       socket.off('friend_removed');
       socket.off('friend_status_update');
@@ -566,7 +562,7 @@ const Home = () => {
       socket.off('vault_verify_result');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [myUserId, friends, pendingPrivateChatId]); // RESTORED 'friends' dependency
+  }, [myUserId, friends, pendingPrivateChatId]);
 
   // --- STABLE WebRTC Signaling & Connection Persistence ---
   // Define visibility handler before useEffect to avoid ReferenceError
