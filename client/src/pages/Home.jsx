@@ -611,57 +611,6 @@ const Home = () => {
       }
     });
 
-    socket.on('matched', async (data) => {
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setStatus('Matched');
-      setMessages([]);
-      setPartnerUserId(data.partnerUserId);
-      sessionStorage.setItem('current_room_id', data.roomId);
-      
-      if (data.isPrivate) {
-        const id = localStorage.getItem('chat_user_id');
-        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
-        // Note: we might not have friends list here, but partner name is handled in UI render
-      } else {
-        setPartnerName('Stranger');
-      }
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoined', async (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setPartnerUserId(data.partnerUserId);
-      
-      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
-      if (savedKey) {
-        try {
-          const key = await importSharedKey(savedKey);
-          setSharedKey(key);
-          sharedKeyRef.current = key;
-        } catch (e) { console.error("Failed to restore shared key", e); }
-      }
-      
-      const currentId = localStorage.getItem('chat_user_id');
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoin_failed', () => {
-      sessionStorage.removeItem('current_room_id');
-      setStatus('Idle');
-    });
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -669,9 +618,6 @@ const Home = () => {
       socket.off('call_accepted');
       socket.off('call_ended');
       socket.off('ice_candidate');
-      socket.off('matched');
-      socket.off('rejoined');
-      socket.off('rejoin_failed');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []); // Truly stable listeners
