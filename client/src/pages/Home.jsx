@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap, LogOut } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -841,6 +841,7 @@ const Home = () => {
     setRoomId(null);
     setSharedKey(null);
     sessionStorage.removeItem('current_room_id');
+    setIsVaultUnlocked(false); // Re-lock the vault
   };
 
   const handleSendMessage = async (e) => {
@@ -1313,11 +1314,25 @@ const Home = () => {
               <Menu className="w-6 h-6 text-gray-400" />
             </button>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">Learn English</span>
+              <span className="font-bold text-white">
+                {status === 'Matched' && partnerUserId 
+                  ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger')
+                  : 'Learn English'}
+              </span>
               {status === 'Matched' ? (
-                <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
-                </span>
+                (() => {
+                  const friend = friends.find(f => f.userId === partnerUserId);
+                  const isOnline = friend ? friend.isOnline : true; // Default true for random matches
+                  return isOnline ? (
+                    <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-white/5 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 border border-white/5">
+                       <div className="w-1.5 h-1.5 bg-gray-500 rounded-full" /> Offline
+                    </span>
+                  );
+                })()
               ) : status === 'Waiting' ? (
                 <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
                    Finding...
@@ -1327,9 +1342,11 @@ const Home = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
-              <Plus className="w-5 h-5" />
-            </button>
+            {(status === 'Matched' || status === 'Waiting' || status === 'Disconnected') && (
+              <button onClick={endSession} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="End Session">
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
             
             {(status === 'Matched' || status === 'Disconnected') && roomId && (
               <>
@@ -1445,10 +1462,10 @@ const Home = () => {
                   <ChatBox 
                     messages={messages} 
                     isPartnerTyping={isPartnerTyping} 
-                    socketId={myUserId} // Pass myUserId instead of socket.id
+                    socketId={myUserId} 
                     status={status}
                     onDeleteMessage={deleteMessage}
-                    partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
+                    partnerName={status === 'Matched' && partnerUserId ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger') : 'Stranger'}
                     onZoomImage={setZoomedImage}
                   />
                   {partnerMediaStatus && (
