@@ -68,6 +68,7 @@ const Home = () => {
   const [isStealthMode, setIsStealthMode] = useState(false);
   const [stealthWord, setStealthWord] = useState(null);
   const [isFetchingWord, setIsFetchingWord] = useState(false);
+  const [isMirrored, setIsMirrored] = useState(true);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -1051,7 +1052,7 @@ const Home = () => {
               autoPlay 
               playsInline 
               muted 
-              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''}`}
+              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored ? '-scale-x-100' : ''}`}
             />
             {isCameraOff && (
               <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
@@ -1499,6 +1500,21 @@ const Home = () => {
                 <p className="text-xs text-gray-500 italic">
                   This name will be shown to people you send friend requests to.
                 </p>
+                
+                <div className="pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Mirror My Video</h4>
+                      <p className="text-[10px] text-gray-500">Flips your camera preview like a mirror</p>
+                    </div>
+                    <button 
+                      onClick={() => setIsMirrored(!isMirrored)}
+                      className={`w-12 h-6 rounded-full transition-all relative ${isMirrored ? 'bg-blue-600' : 'bg-gray-700'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isMirrored ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+                </div>
 
                 <button 
                   onClick={updateProfile}
