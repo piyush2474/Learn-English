@@ -489,13 +489,43 @@ const Home = () => {
       }
     });
 
+    socket.on('friend_added', (data) => {
+      setFriends(prev => {
+        const exists = prev.find(f => f.userId === data.userId);
+        if (exists) return prev;
+        return [...prev, { 
+          userId: data.userId, 
+          name: data.name, 
+          isOnline: data.isOnline,
+          avatarColor: data.avatarColor,
+          lastActive: data.lastActive
+        }];
+      });
+      setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
+    });
+
+    socket.on('incoming_friend_request', (data) => {
+      setFriendRequests(prev => [...prev, data]);
+    });
+
+    socket.on('friend_removed', (data) => {
+      setFriends(prev => prev.filter(f => f.userId !== data.userId));
+    });
+
+    socket.on('init_data', (data) => {
+      setMyName(data.name || 'Stranger');
+      setNameInput(data.name || 'Stranger');
+      setFriends(data.friends || []);
+      setFriendRequests(data.pendingRequests || []);
+      setIsVaultEnabled(data.isVaultEnabled || false);
+    });
+
     socket.on('partner_disconnected', () => {
       setStatus('Disconnected');
       setMessages((prev) => [
         ...prev,
         { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
-      // Keep roomId and sharedKey for potential rejoin
       endCall();
     });
 
@@ -536,7 +566,7 @@ const Home = () => {
       socket.off('vault_verify_result');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [myUserId, pendingPrivateChatId]);
+  }, [myUserId, friends, pendingPrivateChatId]); // RESTORED 'friends' dependency
 
   // --- STABLE WebRTC Signaling & Connection Persistence ---
   // Define visibility handler before useEffect to avoid ReferenceError
