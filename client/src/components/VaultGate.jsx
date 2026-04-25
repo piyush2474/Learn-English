@@ -9,6 +9,17 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Auto-submit when 4 digits are entered
+  useEffect(() => {
+    if (step === 'create' && pin.length === 4) {
+      setTimeout(() => handleSubmit(), 200);
+    } else if (step === 'confirm' && confirmPin.length === 4) {
+      setTimeout(() => handleSubmit(), 200);
+    } else if (step === 'verify' && pin.length === 4) {
+      setTimeout(() => handleSubmit(), 200);
+    }
+  }, [pin, confirmPin, step]);
+
   const handleKeyPress = (num) => {
     if (isSuccess) return;
     if (step === 'create' || step === 'verify') {
@@ -109,8 +120,8 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
         )}
         
         <div className="flex flex-col items-center">
-          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mb-1 shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
-          <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em]">Security</span>
+          <div className="w-2 h-2 bg-blue-500 rounded-full mb-1.5 shadow-[0_0_15px_rgba(59,130,246,0.8)]" />
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.5em]">Security Protocol</span>
         </div>
 
         {onClose ? (
@@ -138,12 +149,12 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
           </div>
         </div>
 
-        <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight text-center">
+        <h2 className="text-3xl md:text-5xl font-black text-white mb-4 tracking-tighter text-center leading-tight">
           {step === 'create' ? 'Create Vault PIN' : 
            step === 'confirm' ? 'Confirm PIN' : 
            'Private Vault'}
         </h2>
-        <p className="text-gray-400 text-xs md:text-sm font-medium mb-6 md:mb-8 text-center max-w-[280px] leading-relaxed">
+        <p className="text-gray-400 text-sm md:text-lg font-medium mb-12 md:mb-20 text-center max-w-[300px] md:max-w-[400px] leading-relaxed opacity-70">
           {step === 'create' ? 'Protect your conversations with a secure 4-digit PIN' : 
            step === 'confirm' ? 'Re-enter your PIN to verify and activate the vault' : 
            'Access your private and secured conversations'}
@@ -163,13 +174,13 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
           ))}
         </div>
 
-        {/* Number Pad (Extremely compact for short screens) */}
-        <div className="grid grid-cols-3 gap-x-4 md:gap-x-6 gap-y-3 md:gap-y-4 w-full max-w-[240px] md:max-w-[280px]">
+        {/* Number Pad (More spaced out for premium feel) */}
+        <div className="grid grid-cols-3 gap-x-8 md:gap-x-12 gap-y-4 md:gap-y-6 w-full max-w-[280px] md:max-w-[360px]">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleKeyPress(num.toString())}
-              className="h-12 md:h-16 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-xl md:text-2xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+              className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-95 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5 shadow-xl"
             >
               {num}
             </button>
@@ -177,38 +188,23 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
           <div />
           <button
             onClick={() => handleKeyPress('0')}
-            className="h-12 md:h-16 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-xl md:text-2xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+            className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-95 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5 shadow-xl"
           >
             0
           </button>
           <button
             onClick={handleBackspace}
-            className="h-12 md:h-16 rounded-full flex items-center justify-center text-gray-400 active:scale-90 transition-all"
+            className="h-16 w-16 md:h-20 md:w-20 rounded-full flex items-center justify-center text-gray-500 active:scale-95 transition-all hover:text-white"
           >
-            <Delete className="w-5 h-5 md:w-6 md:h-6" />
+            <Delete className="w-6 h-6 md:w-8 md:h-8" />
           </button>
         </div>
       </div>
 
-      {/* Bottom Action Button */}
-      <div className="w-full max-w-md mt-4 relative z-20">
-        <button
-          onClick={handleSubmit}
-          disabled={currentPin.length !== 4}
-          className={`w-full py-4 md:py-5 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 ${
-            currentPin.length === 4 
-              ? 'bg-blue-600 text-white shadow-[0_20px_40px_-10px_rgba(37,99,235,0.5)]' 
-              : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5'
-          }`}
-        >
-          {step === 'create' ? 'Continue' : 
-           step === 'confirm' ? 'Activate Vault' : 
-           'Access Chat'}
-          {currentPin.length === 4 && <ArrowRight className="w-4 h-4 animate-in slide-in-from-left-2" />}
-        </button>
-
+      {/* Error Message */}
+      <div className="h-10 mt-4 relative z-20">
         {error && (
-          <p className="mt-6 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] text-center animate-pulse">
+          <p className="text-red-500 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-center animate-pulse">
             {error}
           </p>
         )}
