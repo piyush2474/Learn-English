@@ -602,6 +602,13 @@ const Home = () => {
   }, [myUserId, pendingPrivateChatId]); // Removed friends from dependencies to ensure stability
 
   // --- STABLE WebRTC Signaling & Connection Persistence ---
+  // Define visibility handler before useEffect to avoid ReferenceError
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      setIsVaultUnlocked(false);
+    }
+  };
+
   useEffect(() => {
     socket.on('incoming_call', (data) => {
       setIsReceivingCall(true);
@@ -692,12 +699,6 @@ const Home = () => {
       setStatus('Idle');
     });
 
-    // Auto-Lock when tab loses focus
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setIsVaultUnlocked(false);
-      }
-    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
