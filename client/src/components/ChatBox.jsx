@@ -20,8 +20,8 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
       <div className="flex-1 flex flex-col min-h-0 relative z-10">
         {messages.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-4 space-y-6">
-            <h1 className="text-4xl font-bold text-white tracking-tight">Practice English</h1>
-            <p className="text-gray-400 max-w-sm">Start a conversation to begin practicing!</p>
+            <h1 className="text-4xl font-bold text-white tracking-tight">Elite Chat</h1>
+            <p className="text-gray-400 max-w-sm">Connect, share, and chat privately in real-time.</p>
           </div>
         )}
         

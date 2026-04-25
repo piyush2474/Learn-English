@@ -63,7 +63,10 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   };
 
   useEffect(() => {
-    const handleWrongPin = () => triggerError('Incorrect PIN');
+    const handleWrongPin = () => {
+      triggerError('Incorrect PIN');
+      setPin(''); // Auto-empty field for easy re-entry
+    };
     window.addEventListener('wrong-vault-pin', handleWrongPin);
     return () => window.removeEventListener('wrong-vault-pin', handleWrongPin);
   }, []);
@@ -78,7 +81,6 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
         </div>
         <h2 className="text-3xl font-black text-white mb-3 tracking-tight text-center">Vault Secured</h2>
         <p className="text-gray-400 text-center font-medium">Your private conversations are now protected.</p>
-        
         {/* Animated Particles simulation */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-green-500/5 blur-[120px] rounded-full" />
@@ -88,7 +90,7 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-between py-6 px-6 animate-in fade-in duration-500 overflow-hidden font-sans">
+    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-between py-10 px-6 animate-in fade-in duration-500 overflow-hidden font-sans">
       {/* Background Decorative Gradient */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
@@ -136,15 +138,15 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
           </div>
         </div>
 
-        <h2 className="text-xl md:text-2xl font-black text-white mb-1 tracking-tighter text-center">
+        <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight text-center">
           {step === 'create' ? 'Create Vault PIN' : 
            step === 'confirm' ? 'Confirm PIN' : 
            'Private Vault'}
         </h2>
-        <p className="text-gray-500 text-[10px] md:text-xs font-medium mb-4 md:mb-8 text-center max-w-[240px] leading-relaxed">
+        <p className="text-gray-400 text-xs md:text-sm font-medium mb-6 md:mb-8 text-center max-w-[280px] leading-relaxed">
           {step === 'create' ? 'Protect your conversations with a secure 4-digit PIN' : 
            step === 'confirm' ? 'Re-enter your PIN to verify and activate the vault' : 
-           'Your identity and chats are secured by the vault'}
+           'Access your private and secured conversations'}
         </p>
 
         {/* PIN Indicators */}

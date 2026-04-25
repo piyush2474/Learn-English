@@ -1343,7 +1343,7 @@ const Home = () => {
               <Menu className="w-6 h-6 text-gray-400" />
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-white truncate max-w-[150px]">
+              <span className="text-base sm:text-lg font-black text-white truncate max-w-[160px] sm:max-w-none tracking-tight">
                 {status === 'Matched' && partnerUserId 
                   ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger')
                   : 'Elite Chat'}
@@ -1559,7 +1559,7 @@ const Home = () => {
               </button>
             </form>
             <p className="hidden sm:block text-[11px] text-center text-gray-500 mt-3 font-medium">
-              Learn English can help you practice conversations in real-time.
+              Elite Chat provides a secure space for real-time private conversations.
             </p>
           </footer>
         )}
