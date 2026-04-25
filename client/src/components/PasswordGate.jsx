@@ -26,87 +26,78 @@ const PasswordGate = ({ children }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#050505] font-sans overflow-hidden">
-      {/* Dynamic Background Glows */}
-      <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full animate-pulse pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-purple-600/10 blur-[150px] rounded-full animate-pulse pointer-events-none" style={{ animationDelay: '1s' }}></div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a] font-sans">
+      <div className="w-full max-w-md px-6 py-12 text-center">
+        {/* Decorative Background Glows */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-purple-600/10 blur-[100px] rounded-full pointer-events-none"></div>
 
-      <div className="w-full max-w-md px-8 py-16 relative z-10">
-        <div className="space-y-12">
-          {/* Header Section */}
-          <div className="flex flex-col items-center space-y-6 text-center">
-            <div className="p-5 rounded-3xl bg-[#111] border border-white/10 shadow-2xl backdrop-blur-3xl ring-1 ring-white/5">
-              <Lock className="w-12 h-12 text-blue-500" />
+        <div className="relative z-10 space-y-8">
+          {/* Logo/Icon Section */}
+          <div className="flex flex-col items-center space-y-4">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 shadow-2xl backdrop-blur-xl">
+              <Lock className="w-10 h-10 text-blue-400" />
             </div>
-            <div className="space-y-3">
-              <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white leading-tight">
-                Protected Access
-              </h1>
-              <p className="text-gray-500 text-sm md:text-base font-medium opacity-80">
-                Please enter the password to continue
-              </p>
-            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              Protected Access
+            </h1>
+            <p className="text-gray-400 text-sm">
+              Please enter the password to continue
+            </p>
           </div>
 
           {/* Form Section */}
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative group">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password..."
-                className={`w-full px-6 py-5 bg-[#0f0f0f]/80 border-2 ${
-                  error ? 'border-red-500/50' : 'border-white/5 group-hover:border-white/10'
-                } rounded-2xl text-white text-lg placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:ring-4 focus:ring-blue-500/10 transition-all duration-300 backdrop-blur-2xl shadow-inner`}
+                className={`w-full px-5 py-4 bg-white/5 border ${
+                  error ? 'border-red-500/50' : 'border-white/10 group-hover:border-white/20'
+                } rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all duration-300 backdrop-blur-md`}
                 autoFocus
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-white transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-white transition-colors"
               >
                 {showPassword ? (
-                  <EyeOff className="w-6 h-6" />
+                  <EyeOff className="w-5 h-5" />
                 ) : (
-                  <Eye className="w-6 h-6" />
+                  <Eye className="w-5 h-5" />
                 )}
               </button>
             </div>
 
             {error && (
-              <p className="text-red-500 text-xs font-black uppercase tracking-widest text-center animate-shake">
-                Incorrect Access Key
+              <p className="text-red-400 text-sm animate-pulse">
+                Incorrect password. Please try again.
               </p>
             )}
 
             <button
               type="submit"
-              className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase tracking-[0.2em] rounded-2xl shadow-[0_20px_40px_-10px_rgba(37,99,235,0.3)] transform active:scale-[0.97] transition-all duration-300 ring-1 ring-white/10"
+              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/20 transform active:scale-[0.98] transition-all duration-200"
             >
               Unlock Site
             </button>
           </form>
 
+          {/* Big Password Hint for Friends */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mt-8 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] mb-2 font-black">Password Hint</p>
+            <p className="text-3xl font-black text-blue-400 tracking-widest">Mishu24</p>
+          </div>
+
           {/* Footer Text */}
-          <div className="text-gray-700 text-[10px] font-black uppercase tracking-[0.4em] text-center pt-8 opacity-50">
+          <div className="text-gray-600 text-xs uppercase tracking-widest pt-4">
             Secured Infrastructure
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-8px); }
-          40% { transform: translateX(8px); }
-          60% { transform: translateX(-4px); }
-          80% { transform: translateX(4px); }
-        }
-        .animate-shake {
-          animation: shake 0.4s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 };
