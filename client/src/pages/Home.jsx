@@ -1005,6 +1005,7 @@ const Home = () => {
     // Always lock before opening a new chat for Ultra-Security
     setIsVaultUnlocked(false);
     
+    // Only show vault if the CURRENT user has it enabled
     if (isVaultEnabled) {
       setPendingPrivateChatId(friendId);
       setShowVaultGate('verify');

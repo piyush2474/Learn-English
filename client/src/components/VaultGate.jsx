@@ -124,50 +124,50 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
       </div>
 
       {/* Center Content */}
-      <div className={`w-full max-w-md flex flex-col items-center relative z-20 flex-1 justify-center ${isAnimating ? 'animate-shake' : ''}`}>
+      <div className={`w-full max-w-md flex flex-col items-center relative z-20 flex-1 justify-center overflow-y-auto ${isAnimating ? 'animate-shake' : ''}`}>
         {/* Animated Icon Container */}
-        <div className="relative mb-4 md:mb-8">
-          <div className={`w-16 h-16 md:w-24 md:h-24 rounded-[24px] md:rounded-[32px] flex items-center justify-center transition-all duration-500 ${
+        <div className="relative mb-2 md:mb-4">
+          <div className={`w-14 h-14 md:w-20 md:h-20 rounded-[20px] md:rounded-[28px] flex items-center justify-center transition-all duration-500 ${
             error ? 'bg-red-500/10 border-red-500/30' : 'bg-blue-500/10 border-blue-500/30'
           } border shadow-[0_0_40px_rgba(0,0,0,0.5)]`}>
-            {step === 'verify' ? <Lock className="w-8 h-8 md:w-10 md:h-10 text-blue-500" /> : 
-             step === 'confirm' ? <ShieldAlert className="w-8 h-8 md:w-10 md:h-10 text-orange-500" /> :
-             <ShieldCheck className="w-8 h-8 md:w-10 md:h-10 text-green-500" />}
+            {step === 'verify' ? <Lock className="w-6 h-6 md:w-8 md:h-8 text-blue-500" /> : 
+             step === 'confirm' ? <ShieldAlert className="w-6 h-6 md:w-8 md:h-8 text-orange-500" /> :
+             <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-green-500" />}
           </div>
         </div>
 
-        <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tighter text-center">
+        <h2 className="text-xl md:text-2xl font-black text-white mb-1 tracking-tighter text-center">
           {step === 'create' ? 'Create Vault PIN' : 
            step === 'confirm' ? 'Confirm PIN' : 
            'Private Vault'}
         </h2>
-        <p className="text-gray-500 text-[12px] md:text-sm font-medium mb-6 md:mb-12 text-center max-w-[260px] leading-relaxed">
+        <p className="text-gray-500 text-[10px] md:text-xs font-medium mb-4 md:mb-8 text-center max-w-[240px] leading-relaxed">
           {step === 'create' ? 'Protect your conversations with a secure 4-digit PIN' : 
            step === 'confirm' ? 'Re-enter your PIN to verify and activate the vault' : 
            'Your identity and chats are secured by the vault'}
         </p>
 
         {/* PIN Indicators */}
-        <div className="flex gap-5 mb-8 md:mb-16">
+        <div className="flex gap-4 mb-6 md:mb-10">
           {[0, 1, 2, 3].map((i) => (
             <div 
               key={i}
-              className={`w-3 h-3 md:w-4 md:h-4 rounded-full transition-all duration-300 border-2 ${
+              className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-full transition-all duration-300 border-2 ${
                 currentPin.length > i 
-                  ? 'bg-blue-500 border-blue-500 scale-125 md:scale-150 shadow-[0_0_25px_rgba(59,130,246,0.8)]' 
+                  ? 'bg-blue-500 border-blue-500 scale-125 shadow-[0_0_20px_rgba(59,130,246,0.8)]' 
                   : 'bg-white/10 border-white/5'
               } ${error ? 'border-red-500 bg-red-500/30' : ''}`}
             />
           ))}
         </div>
 
-        {/* Number Pad (More compact for mobile) */}
-        <div className="grid grid-cols-3 gap-x-6 md:gap-x-8 gap-y-4 md:gap-y-6 w-full max-w-[280px] md:max-w-[320px]">
+        {/* Number Pad (Extremely compact for short screens) */}
+        <div className="grid grid-cols-3 gap-x-4 md:gap-x-6 gap-y-3 md:gap-y-4 w-full max-w-[240px] md:max-w-[280px]">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleKeyPress(num.toString())}
-              className="h-14 md:h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+              className="h-12 md:h-16 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-xl md:text-2xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
             >
               {num}
             </button>
@@ -175,21 +175,21 @@ const VaultGate = ({ mode = 'verify', onUnlock, onClose, onSetPassword }) => {
           <div />
           <button
             onClick={() => handleKeyPress('0')}
-            className="h-14 md:h-20 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-2xl md:text-3xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
+            className="h-12 md:h-16 rounded-full bg-white/[0.04] active:bg-white/[0.1] active:scale-90 text-xl md:text-2xl font-bold text-white transition-all flex items-center justify-center border border-white/5"
           >
             0
           </button>
           <button
             onClick={handleBackspace}
-            className="h-14 md:h-20 rounded-full flex items-center justify-center text-gray-400 active:scale-90 transition-all"
+            className="h-12 md:h-16 rounded-full flex items-center justify-center text-gray-400 active:scale-90 transition-all"
           >
-            <Delete className="w-6 h-6 md:w-8 md:h-8" />
+            <Delete className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
       </div>
 
       {/* Bottom Action Button */}
-      <div className="w-full max-w-md mt-6 md:mt-10 relative z-20">
+      <div className="w-full max-w-md mt-4 relative z-20">
         <button
           onClick={handleSubmit}
           disabled={currentPin.length !== 4}
