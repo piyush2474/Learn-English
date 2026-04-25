@@ -599,18 +599,118 @@ const Home = () => {
       socket.off('partner_uploading_media');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [myUserId, friends, pendingPrivateChatId]);
+  }, [myUserId, pendingPrivateChatId]); // Removed friends from dependencies to ensure stability
 
-  // Auto-Lock when tab loses focus
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      setIsVaultUnlocked(false);
-    }
-  };
+  // --- STABLE WebRTC Signaling & Connection Persistence ---
   useEffect(() => {
+    socket.on('incoming_call', (data) => {
+      setIsReceivingCall(true);
+      setIncomingSignal(data.signal);
+      setCallType(data.type || 'audio');
+    });
+
+    socket.on('call_accepted', async (signal) => {
+      if (peerConnection.current) {
+        try {
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+          setCallAccepted(true);
+          // Process queued candidates
+          while (iceCandidatesQueue.current.length > 0) {
+            const candidate = iceCandidatesQueue.current.shift();
+            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        } catch (err) {
+          console.error("Error setting remote description:", err);
+        }
+      }
+    });
+
+    socket.on('call_ended', () => {
+      endCall();
+    });
+
+    socket.on('ice_candidate', async (candidate) => {
+      try {
+        if (peerConnection.current && peerConnection.current.remoteDescription) {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          iceCandidatesQueue.current.push(candidate);
+        }
+      } catch (err) {
+        console.error("Error adding ICE candidate:", err);
+      }
+    });
+
+    socket.on('matched', async (data) => {
+      setRoomId(data.roomId);
+      roomIdRef.current = data.roomId;
+      setStatus('Matched');
+      setMessages([]);
+      setPartnerUserId(data.partnerUserId);
+      sessionStorage.setItem('current_room_id', data.roomId);
+      
+      if (data.isPrivate) {
+        const id = localStorage.getItem('chat_user_id');
+        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
+        // Note: we might not have friends list here, but partner name is handled in UI render
+      } else {
+        setPartnerName('Stranger');
+      }
+
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
+        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
+      }
+    });
+
+    socket.on('rejoined', async (data) => {
+      setStatus('Matched');
+      setRoomId(data.roomId);
+      roomIdRef.current = data.roomId;
+      setPartnerUserId(data.partnerUserId);
+      
+      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
+      if (savedKey) {
+        try {
+          const key = await importSharedKey(savedKey);
+          setSharedKey(key);
+          sharedKeyRef.current = key;
+        } catch (e) { console.error("Failed to restore shared key", e); }
+      }
+      
+      const currentId = localStorage.getItem('chat_user_id');
+      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
+
+      if (myKeyPairRef.current) {
+        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
+        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
+      }
+    });
+
+    socket.on('rejoin_failed', () => {
+      sessionStorage.removeItem('current_room_id');
+      setStatus('Idle');
+    });
+
+    // Auto-Lock when tab loses focus
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsVaultUnlocked(false);
+      }
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+
+    return () => {
+      socket.off('incoming_call');
+      socket.off('call_accepted');
+      socket.off('call_ended');
+      socket.off('ice_candidate');
+      socket.off('matched');
+      socket.off('rejoined');
+      socket.off('rejoin_failed');
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // Truly stable listeners
 
   const startAudioAnalysis = (stream) => {
     const context = new (window.AudioContext || window.webkitAudioContext)();
