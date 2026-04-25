@@ -611,57 +611,6 @@ const Home = () => {
       }
     });
 
-    socket.on('matched', async (data) => {
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setStatus('Matched');
-      setMessages([]);
-      setPartnerUserId(data.partnerUserId);
-      sessionStorage.setItem('current_room_id', data.roomId);
-      
-      if (data.isPrivate) {
-        const id = localStorage.getItem('chat_user_id');
-        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
-        // Note: we might not have friends list here, but partner name is handled in UI render
-      } else {
-        setPartnerName('Stranger');
-      }
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoined', async (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setPartnerUserId(data.partnerUserId);
-      
-      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
-      if (savedKey) {
-        try {
-          const key = await importSharedKey(savedKey);
-          setSharedKey(key);
-          sharedKeyRef.current = key;
-        } catch (e) { console.error("Failed to restore shared key", e); }
-      }
-      
-      const currentId = localStorage.getItem('chat_user_id');
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoin_failed', () => {
-      sessionStorage.removeItem('current_room_id');
-      setStatus('Idle');
-    });
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -669,9 +618,6 @@ const Home = () => {
       socket.off('call_accepted');
       socket.off('call_ended');
       socket.off('ice_candidate');
-      socket.off('matched');
-      socket.off('rejoined');
-      socket.off('rejoin_failed');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []); // Truly stable listeners
@@ -711,16 +657,18 @@ const Home = () => {
     });
 
     let iceRestartCount = 0;
-    let isNegotiating = false;
-
     pc.oniceconnectionstatechange = () => {
       console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         if (iceRestartCount < 2) {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
-          iceRestartCount++;
-          // restartIce() automatically triggers onnegotiationneeded safely.
           pc.restartIce();
+          iceRestartCount++;
+          pc.createOffer({ iceRestart: true }).then(offer => {
+            return pc.setLocalDescription(offer).then(() => {
+              socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
+            });
+          }).catch(e => console.error("ICE Restart signaling failed:", e));
         } else {
           console.warn("WebRTC: Connection failed after retries. A TURN server is required for this network.");
         }
@@ -729,17 +677,12 @@ const Home = () => {
 
     pc.onnegotiationneeded = async () => {
        try {
-         if (isNegotiating || pc.signalingState !== 'stable') return;
-         isNegotiating = true;
-         
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
          socket.emit('call_user', { roomId, signalData: offer, type });
        } catch (err) {
          console.error("Negotiation error:", err);
-       } finally {
-         isNegotiating = false;
        }
     };
 
@@ -755,11 +698,8 @@ const Home = () => {
     };
 
     if (localStream.current) {
-      const senders = pc.getSenders();
       localStream.current.getTracks().forEach(track => {
-        if (!senders.find(s => s.track === track)) {
-          pc.addTrack(track, localStream.current);
-        }
+        pc.addTrack(track, localStream.current);
       });
     }
 
