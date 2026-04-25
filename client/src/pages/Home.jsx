@@ -532,11 +532,19 @@ const Home = () => {
     });
 
     socket.on('partner_disconnected', () => {
-      setStatus('Disconnected');
-      setMessages((prev) => [
-        ...prev,
-        { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
-      ]);
+      if (roomIdRef.current?.startsWith('private_')) {
+        // For friends, we don't end the "Matched" state, we just show a system message
+        setMessages((prev) => [
+          ...prev,
+          { message: 'Partner is offline. You can still send messages.', senderId: 'system', timestamp: new Date().toISOString() }
+        ]);
+      } else {
+        setStatus('Disconnected');
+        setMessages((prev) => [
+          ...prev,
+          { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
+        ]);
+      }
       endCall();
     });
 
@@ -1527,7 +1535,7 @@ const Home = () => {
               <button
                 type="button"
                 onClick={() => fileInputRef.current.click()}
-                disabled={status !== 'Matched'}
+                disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
                 className="pl-3 sm:pl-4 pr-1 sm:pr-2 text-gray-400 hover:text-white transition-colors"
               >
                 <Plus className="w-5 h-5" />
@@ -1536,7 +1544,7 @@ const Home = () => {
                 rows="1"
                 value={inputText}
                 onChange={handleTyping}
-                disabled={status !== 'Matched'}
+                disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
                 placeholder="Message..."
                 className="w-full bg-transparent text-white px-3 sm:px-5 py-3 sm:py-4 pr-12 resize-none focus:outline-none min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-48 scrollbar-hide text-[15px]"
                 onKeyDown={(e) => {
@@ -1548,12 +1556,12 @@ const Home = () => {
               />
               <button
                 type="submit"
-                disabled={status !== 'Matched' || !inputText.trim()}
+                disabled={(status !== 'Matched' && !roomId?.startsWith('private_')) || !inputText.trim()}
                 className={`absolute right-1.5 sm:right-2 p-1.5 rounded-xl transition-all ${
                   inputText.trim() && status === 'Matched' 
                     ? 'bg-white text-black' 
                     : 'bg-[#404040] text-[#171717]'
-                }`}
+                } ${status !== 'Matched' && roomId?.startsWith('private_') ? 'bg-blue-600 text-white' : ''}`}
               >
                 <ArrowUp className="w-5 h-5 stroke-[2.5]" />
               </button>
