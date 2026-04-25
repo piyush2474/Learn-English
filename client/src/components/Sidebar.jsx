@@ -98,7 +98,6 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                     {friend.isOnline && (
                       <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#171717] shadow-lg ${
                         friend.roomId === currentRoomId ? 'bg-blue-500 shadow-blue-500/50' :
-                        friend.activity === 'busy' ? 'bg-orange-500 shadow-orange-500/50' :
                         'bg-green-500 shadow-green-500/50'
                       }`} />
                     )}
@@ -119,8 +118,6 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                       {friend.isOnline ? (
                         friend.roomId === currentRoomId ? (
                           <span className="text-blue-400 font-bold animate-pulse">In chat with you</span>
-                        ) : friend.activity === 'busy' ? (
-                          <span className="text-orange-400 font-medium italic">In a call</span>
                         ) : (
                           <span className="text-green-500 font-medium">Online</span>
                         )
