@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap, LogOut } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
 import LMSDashboard from '../components/stealth/LMSDashboard';
-import VaultGate from '../components/VaultGate';
 import { 
   encryptWithKey, 
   decryptWithKey, 
@@ -69,11 +68,6 @@ const Home = () => {
   const [isStealthMode, setIsStealthMode] = useState(false);
   const [stealthWord, setStealthWord] = useState(null);
   const [isFetchingWord, setIsFetchingWord] = useState(false);
-  const [isMirrored, setIsMirrored] = useState(true);
-  const [isVaultEnabled, setIsVaultEnabled] = useState(false);
-  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
-  const [showVaultGate, setShowVaultGate] = useState(null); // 'verify' | 'setup' | null
-  const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -313,58 +307,32 @@ const Home = () => {
       sessionStorage.removeItem('current_room_id');
     });
 
-    // Cleaned up core socket listeners
     socket.on('matched', async (data) => {
       setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
       setStatus('Matched');
-      setMessages([]);
+      setMessages([]); // Clear previous chat
       setPartnerUserId(data.partnerUserId);
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        const id = localStorage.getItem('chat_user_id');
-        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
+        const otherUserId = data.roomId.replace('private_', '').replace(myUserId, '').replace('_', '');
         const friend = friends.find(f => f.userId === otherUserId);
-        if (friend) setPartnerName(friend.name);
-        else setPartnerName('Friend');
+        if (friend) {
+          setPartnerName(friend.name);
+        } else {
+          setPartnerName('Friend');
+        }
+        // Mark seen for private rooms
+        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
       } else {
         setPartnerName('Stranger');
       }
 
+      // Send our public key to the partner
       if (myKeyPairRef.current) {
         const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
         socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
       }
-    });
-
-    socket.on('rejoined', async (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setPartnerUserId(data.partnerUserId);
-      
-      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
-      if (savedKey) {
-        try {
-          const key = await importSharedKey(savedKey);
-          setSharedKey(key);
-          sharedKeyRef.current = key;
-        } catch (e) { console.error("Failed to restore shared key", e); }
-      }
-      
-      const currentId = localStorage.getItem('chat_user_id');
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoin_failed', () => {
-      sessionStorage.removeItem('current_room_id');
-      setStatus('Idle');
     });
 
     socket.on('exchange_keys', async (data) => {
@@ -372,6 +340,8 @@ const Home = () => {
         const partnerPubKey = await importPublicKey(data.publicKey);
         const shared = await deriveSharedSecret(myKeyPairRef.current.privateKey, partnerPubKey);
         setSharedKey(shared);
+        
+        // Persist key immediately
         if (roomIdRef.current) {
           const exported = await exportSharedKey(shared);
           localStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
@@ -391,6 +361,7 @@ const Home = () => {
           }
         }));
       };
+
       if (storedKey) {
         try {
           const key = await importSharedKey(storedKey);
@@ -405,18 +376,26 @@ const Home = () => {
       }
     });
 
+    socket.on('messages_marked_seen', (data) => {
+      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
+    });
+
     socket.on('receive_message', async (data) => {
       let displayMessage = data.message;
       let rawContent = data.message;
+
       if (sharedKeyRef.current) {
         try {
           displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
         } catch (e) {
+          console.error("Decryption failed:", e);
           displayMessage = "[Encrypted Message]";
         }
       } else {
         displayMessage = "[Encrypted Message]";
       }
+
+      // If it's an image, convert to Blob URL for privacy
       if (data.type === 'image' && displayMessage !== "[Encrypted Message]" && displayMessage.startsWith('data:')) {
         try {
           const res = await fetch(displayMessage);
@@ -424,69 +403,27 @@ const Home = () => {
           displayMessage = URL.createObjectURL(blob);
         } catch (e) { console.error("Blob conversion failed", e); }
       }
+
       setMessages((prev) => [...prev, { ...data, message: displayMessage, rawContent }]);
       setIsPartnerTyping(false);
+      
+      // Mark as seen if we are in this room
       if (roomIdRef.current === data.roomId) {
         socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
       }
     });
 
-    socket.on('typing', (data) => {
-      setIsPartnerTyping(data.isTyping);
-    });
-
     socket.on('message_deleted', (data) => {
-      setMessages((prev) => prev.filter(msg => msg.messageId !== data.messageId));
+      const { messageId } = data;
+      setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
     });
 
     socket.on('chat_cleared', () => {
       setMessages([]);
     });
 
-    socket.on('messages_marked_seen', () => {
-      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
-    });
-
-    socket.on('vault_verify_result', (data) => {
-      if (data.success) {
-        setIsVaultUnlocked(true);
-        setShowVaultGate(null);
-        if (pendingPrivateChatId) {
-          socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
-          setPendingPrivateChatId(null);
-          setMessages([]);
-        }
-      } else {
-        window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
-      }
-    });
-
-    socket.on('friend_status_update', (data) => {
-      setFriends(prev => prev.map(f => 
-        f.userId === data.userId 
-          ? { ...f, 
-              isOnline: data.isOnline, 
-              activity: data.activity, 
-              roomId: data.roomId,
-              lastActive: data.lastActive 
-            } 
-          : f
-      ));
-    });
-
-    socket.on('profile_updated', (data) => {
-      setMyName(data.name);
-    });
-
-    socket.on('inform_sent', (data) => {
-      setIsSendingInform(false);
-      if (data.success) {
-        alert("Information sent successfully!");
-        setIsInformModalOpen(false);
-        setInformMessage('');
-      } else {
-        alert("Error: " + data.error);
-      }
+    socket.on('typing', (data) => {
+      setIsPartnerTyping(data.isTyping);
     });
 
     socket.on('friend_added', (data) => {
@@ -517,7 +454,34 @@ const Home = () => {
       setNameInput(data.name || 'Stranger');
       setFriends(data.friends || []);
       setFriendRequests(data.pendingRequests || []);
-      setIsVaultEnabled(data.isVaultEnabled || false);
+    });
+
+    socket.on('friend_status_update', (data) => {
+      setFriends(prev => prev.map(f => 
+        f.userId === data.userId 
+          ? { ...f, 
+              isOnline: data.isOnline, 
+              activity: data.activity, 
+              roomId: data.roomId,
+              lastActive: data.lastActive 
+            } 
+          : f
+      ));
+    });
+
+    socket.on('profile_updated', (data) => {
+      setMyName(data.name);
+    });
+
+    socket.on('inform_sent', (data) => {
+      setIsSendingInform(false);
+      if (data.success) {
+        alert("Information sent successfully!");
+        setIsInformModalOpen(false);
+        setInformMessage('');
+      } else {
+        alert("Error: " + data.error);
+      }
     });
 
     socket.on('partner_disconnected', () => {
@@ -526,53 +490,11 @@ const Home = () => {
         ...prev,
         { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
       ]);
+      // Keep roomId and sharedKey for potential rejoin
       endCall();
     });
 
-    socket.on('partner_uploading_media', (data) => {
-      setPartnerMediaStatus(data.type);
-      setTimeout(() => setPartnerMediaStatus(null), 15000);
-    });
-    // ----------------------
-
-    return () => {
-      socket.off('connect');
-      socket.off('waiting');
-      socket.off('matched');
-      socket.off('user_count');
-      socket.off('receive_message');
-      socket.off('typing');
-      socket.off('partner_disconnected');
-      socket.off('rejoined');
-      socket.off('partner_rejoined');
-      socket.off('rejoin_failed');
-      socket.off('friend_added');
-      socket.off('friend_removed');
-      socket.off('friend_status_update');
-      socket.off('incoming_friend_request');
-      socket.off('init_data');
-      socket.off('profile_updated');
-      socket.off('inform_sent');
-      socket.off('exchange_keys');
-      socket.off('chat_history');
-      socket.off('messages_marked_seen');
-      socket.off('message_deleted');
-      socket.off('chat_cleared');
-      socket.off('partner_uploading_media');
-      socket.off('vault_verify_result');
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [myUserId, friends, pendingPrivateChatId]);
-
-  // --- STABLE WebRTC Signaling & Connection Persistence ---
-  // Define visibility handler before useEffect to avoid ReferenceError
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      setIsVaultUnlocked(false);
-    }
-  };
-
-  useEffect(() => {
+    // --- WebRTC Listeners ---
     socket.on('incoming_call', (data) => {
       setIsReceivingCall(true);
       setIncomingSignal(data.signal);
@@ -611,16 +533,43 @@ const Home = () => {
       }
     });
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    socket.on('partner_uploading_media', (data) => {
+      setPartnerMediaStatus(data.type);
+      setTimeout(() => setPartnerMediaStatus(null), 15000); // Auto-clear after 15s
+    });
+    // ----------------------
 
     return () => {
+      socket.off('connect');
+      socket.off('waiting');
+      socket.off('matched');
+      socket.off('user_count');
+      socket.off('receive_message');
+      socket.off('typing');
+      socket.off('partner_disconnected');
+      socket.off('rejoined');
+      socket.off('partner_rejoined');
+      socket.off('rejoin_failed');
       socket.off('incoming_call');
       socket.off('call_accepted');
       socket.off('call_ended');
       socket.off('ice_candidate');
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      socket.off('friend_added');
+      socket.off('friend_removed');
+      socket.off('friend_status_update');
+      socket.off('incoming_friend_request');
+      socket.off('init_data');
+      socket.off('profile_updated');
+      socket.off('inform_sent');
+      socket.off('exchange_keys');
+      socket.off('chat_history');
+      socket.off('messages_marked_seen');
+      socket.off('message_deleted');
+      socket.off('chat_cleared');
+      socket.off('partner_uploading_media');
+      // socket.disconnect(); // REMOVED: Keep connection stable
     };
-  }, []); // Truly stable listeners
+  }, [myUserId]); 
 
   const startAudioAnalysis = (stream) => {
     const context = new (window.AudioContext || window.webkitAudioContext)();
@@ -664,6 +613,7 @@ const Home = () => {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
           pc.restartIce();
           iceRestartCount++;
+          // We must re-signaling the new offer for ICE restart to work
           pc.createOffer({ iceRestart: true }).then(offer => {
             return pc.setLocalDescription(offer).then(() => {
               socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
@@ -860,7 +810,6 @@ const Home = () => {
     setRoomId(null);
     setSharedKey(null);
     sessionStorage.removeItem('current_room_id');
-    setIsVaultUnlocked(false); // Re-lock the vault
   };
 
   const handleSendMessage = async (e) => {
@@ -1011,26 +960,8 @@ const Home = () => {
 
   const startPrivateChat = (friendId) => {
     endCall();
-    // Always lock before opening a new chat for Ultra-Security
-    setIsVaultUnlocked(false);
-    
-    // Only show vault if the CURRENT user has it enabled
-    if (isVaultEnabled) {
-      setPendingPrivateChatId(friendId);
-      setShowVaultGate('verify');
-    } else {
-      socket.emit("start_private_chat", { friendId });
-      setMessages([]);
-    }
-  };
-
-  const handleSetVaultPin = (pin) => {
-    socket.emit('set_vault_password', { password: pin });
-    setIsVaultUnlocked(true); // Automatically unlock since user just created it
-  };
-
-  const handleVerifyVaultPin = (pin) => {
-    socket.emit('verify_vault_password', { password: pin });
+    socket.emit("start_private_chat", { friendId });
+    setMessages([]);
   };
 
   const clearChat = () => {
@@ -1120,7 +1051,7 @@ const Home = () => {
               autoPlay 
               playsInline 
               muted 
-              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored ? '-scale-x-100' : ''}`}
+              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''}`}
             />
             {isCameraOff && (
               <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
@@ -1338,25 +1269,11 @@ const Home = () => {
               <Menu className="w-6 h-6 text-gray-400" />
             </button>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">
-                {status === 'Matched' && partnerUserId 
-                  ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger')
-                  : 'Learn English'}
-              </span>
+              <span className="font-bold text-white">Learn English</span>
               {status === 'Matched' ? (
-                (() => {
-                  const friend = friends.find(f => f.userId === partnerUserId);
-                  const isOnline = friend ? friend.isOnline : true; // Default true for random matches
-                  return isOnline ? (
-                    <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-white/5 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 border border-white/5">
-                       <div className="w-1.5 h-1.5 bg-gray-500 rounded-full" /> Offline
-                    </span>
-                  );
-                })()
+                <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
+                </span>
               ) : status === 'Waiting' ? (
                 <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
                    Finding...
@@ -1366,11 +1283,9 @@ const Home = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {(status === 'Matched' || status === 'Waiting' || status === 'Disconnected') && (
-              <button onClick={endSession} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="End Session">
-                <LogOut className="w-5 h-5" />
-              </button>
-            )}
+            <button onClick={findNewPartner} className="p-2 hover:bg-white/5 rounded-lg" title="Find New Partner">
+              <Plus className="w-5 h-5" />
+            </button>
             
             {(status === 'Matched' || status === 'Disconnected') && roomId && (
               <>
@@ -1486,10 +1401,10 @@ const Home = () => {
                   <ChatBox 
                     messages={messages} 
                     isPartnerTyping={isPartnerTyping} 
-                    socketId={myUserId} 
+                    socketId={myUserId} // Pass myUserId instead of socket.id
                     status={status}
                     onDeleteMessage={deleteMessage}
-                    partnerName={status === 'Matched' && partnerUserId ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger') : 'Stranger'}
+                    partnerName={status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'}
                     onZoomImage={setZoomedImage}
                   />
                   {partnerMediaStatus && (
@@ -1584,68 +1499,6 @@ const Home = () => {
                 <p className="text-xs text-gray-500 italic">
                   This name will be shown to people you send friend requests to.
                 </p>
-                
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Mirror My Video</h4>
-                      <p className="text-[10px] text-gray-500">Flips your camera preview like a mirror</p>
-                    </div>
-                    <button 
-                      onClick={() => setIsMirrored(!isMirrored)}
-                      className={`w-12 h-6 rounded-full transition-all relative ${isMirrored ? 'bg-blue-600' : 'bg-gray-700'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isMirrored ? 'left-7' : 'left-1'}`} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Security & Vault</h4>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-white">Private Chat Vault</h4>
-                        <p className="text-[10px] text-gray-400">Lock friend list and history</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          if (!isVaultEnabled) {
-                            setShowVaultGate('setup');
-                          } else {
-                            const pass = prompt("Enter PIN to disable vault:");
-                            if (pass) socket.emit('toggle_vault', { enabled: false, password: pass });
-                          }
-                        }}
-                        className={`w-12 h-6 rounded-full transition-all relative ${isVaultEnabled ? 'bg-green-600' : 'bg-gray-700'}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isVaultEnabled ? 'left-7' : 'left-1'}`} />
-                      </button>
-                    </div>
-
-                    {isVaultEnabled && (
-                      <button 
-                        onClick={() => {
-                          const old = prompt("Enter old PIN:");
-                          if (old) {
-                            const newP = prompt("Enter new 4-digit PIN:");
-                            if (newP && newP.length === 4) {
-                              socket.emit('change_vault_password', { oldPassword: old, newPassword: newP });
-                            } else {
-                              alert("PIN must be 4 digits");
-                            }
-                          }
-                        }}
-                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/5 transition-colors"
-                      >
-                        Change Vault PIN
-                      </button>
-                    )}
-                  </div>
-                </div>
 
                 <button 
                   onClick={updateProfile}
@@ -1748,19 +1601,6 @@ const Home = () => {
             Tap anywhere to close
           </div>
         </div>
-      )}
-
-      {/* Vault Modal */}
-      {showVaultGate && (
-        <VaultGate 
-          mode={showVaultGate}
-          onClose={() => {
-            setShowVaultGate(null);
-            setPendingPrivateChatId(null);
-          }}
-          onUnlock={handleVerifyVaultPin}
-          onSetPassword={handleSetVaultPin}
-        />
       )}
     </div>
   );
