@@ -708,11 +708,13 @@ const Home = () => {
   };
 
   const createPeerConnection = (roomId, type) => {
+    if (peerConnection.current && peerConnection.current.signalingState !== 'closed') {
+      return peerConnection.current;
+    }
+
     const pc = new RTCPeerConnection({ 
       iceServers,
       iceCandidatePoolSize: 10,
-      bundlePolicy: 'max-bundle',
-      rtcpMuxPolicy: 'require'
     });
 
     let iceRestartCount = 0;
@@ -737,13 +739,15 @@ const Home = () => {
 
     pc.onnegotiationneeded = async () => {
        try {
-         // Prevent multiple simultaneous negotiations
+         // Perfect Negotiation: Prevent collision if we are currently handling an offer
          if (pc.signalingState !== 'stable') return;
          
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
+         if (pc.signalingState !== 'stable') return;
+         
          await pc.setLocalDescription(offer);
-         socket.emit('call_user', { roomId, signalData: offer, type });
+         socket.emit('call_user', { roomId, signalData: pc.localDescription, type });
        } catch (err) {
          console.error("Negotiation error:", err);
        }
@@ -773,7 +777,7 @@ const Home = () => {
 
     if (localStream.current) {
       localStream.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStream.current);
+        pc.addTransceiver(track, { streams: [localStream.current] });
       });
     }
 
