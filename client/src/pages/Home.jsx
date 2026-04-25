@@ -618,6 +618,11 @@ const Home = () => {
 
     socket.on('call_accepted', async (signal) => {
       if (peerConnection.current) {
+        // Signaling Guard: Only set remote description if we have a local offer pending
+        if (peerConnection.current.signalingState !== 'have-local-offer') {
+          console.warn("WebRTC: Received answer but signalingState is", peerConnection.current.signalingState);
+          return;
+        }
         try {
           await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
           setCallAccepted(true);
@@ -769,6 +774,9 @@ const Home = () => {
 
     pc.onnegotiationneeded = async () => {
        try {
+         // Prevent multiple simultaneous negotiations
+         if (pc.signalingState !== 'stable') return;
+         
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
