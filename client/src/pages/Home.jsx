@@ -1118,64 +1118,49 @@ const Home = () => {
       {isVideoCall && (
         <div className="fixed inset-0 z-[150] bg-[#111] overflow-hidden animate-in fade-in duration-500">
           
-          {/* Main Background Video */}
-          <div className="absolute inset-0">
-            {mainView === 'remote' ? (
-              !callAccepted ? (
-                <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 space-y-4 bg-[#171717]">
-                  <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
+          {/* Remote Video Container */}
+          <div 
+            className={`transition-all duration-500 absolute overflow-hidden ${
+              mainView === 'remote' 
+                ? 'inset-0 z-0' 
+                : 'top-6 right-6 w-32 h-48 md:w-48 md:h-72 z-40 rounded-2xl shadow-2xl border-2 border-white/20 cursor-pointer hover:scale-105'
+            }`}
+            onClick={() => mainView !== 'remote' && setMainView('remote')}
+          >
+            {!callAccepted ? (
+              <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 space-y-4 bg-[#171717]">
+                <div className={`border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin ${mainView === 'remote' ? 'w-16 h-16' : 'w-6 h-6 border-2'}`} />
+                {mainView === 'remote' && (
                   <div>
                     <h3 className="text-xl font-bold text-white mb-1">Connecting Video</h3>
                     <p className="text-sm text-gray-400">Establishing secure connection...</p>
                   </div>
-                </div>
-              ) : (
-                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-              )
-            ) : (
-              <video 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
-              />
-            )}
-            
-            {/* Camera Off Placeholder for Main View */}
-            {mainView === 'local' && isCameraOff && (
-              <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
-                <VideoOff className="w-16 h-16 text-gray-500" />
+                )}
               </div>
+            ) : (
+              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
             )}
           </div>
 
-          {/* Floating PiP Video (Draggable/Clickable) */}
+          {/* Local Video Container */}
           <div 
-            className="absolute top-6 right-6 w-32 h-48 md:w-48 md:h-72 bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 cursor-pointer z-40 hover:scale-105 transition-transform"
-            onClick={() => setMainView(mainView === 'remote' ? 'local' : 'remote')}
+            className={`transition-all duration-500 absolute overflow-hidden ${
+              mainView === 'local' 
+                ? 'inset-0 z-0' 
+                : 'top-6 right-6 w-32 h-48 md:w-48 md:h-72 z-40 rounded-2xl shadow-2xl border-2 border-white/20 cursor-pointer hover:scale-105'
+            }`}
+            onClick={() => mainView !== 'local' && setMainView('local')}
           >
-            {mainView === 'local' ? (
-              !callAccepted ? (
-                <div className="w-full h-full flex items-center justify-center bg-[#171717]">
-                  <div className="w-6 h-6 border-2 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
-                </div>
-              ) : (
-                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-              )
-            ) : (
-              <video 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
-              />
-            )}
-            {/* Camera Off Placeholder for PiP */}
-            {mainView === 'remote' && isCameraOff && (
+            <video 
+              ref={localVideoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
+            />
+            {isCameraOff && (
               <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
-                <VideoOff className="w-8 h-8 text-gray-500" />
+                <VideoOff className={`${mainView === 'local' ? 'w-16 h-16' : 'w-8 h-8'} text-gray-500`} />
               </div>
             )}
           </div>
