@@ -715,7 +715,7 @@ const Home = () => {
           iceRestartCount++;
           pc.createOffer({ iceRestart: true }).then(offer => {
             return pc.setLocalDescription(offer).then(() => {
-              socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
+              socket.emit('call_user', { roomId, signal: offer, type, isRestart: true });
             });
           }).catch(e => console.error("ICE Restart signaling failed:", e));
         } else {
@@ -729,7 +729,7 @@ const Home = () => {
          console.log("WebRTC: Negotiation needed...");
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
-         socket.emit('call_user', { roomId, signalData: offer, type });
+         socket.emit('call_user', { roomId, signal: offer, type });
        } catch (err) {
          console.error("Negotiation error:", err);
        }
@@ -807,7 +807,7 @@ const Home = () => {
       });
       await pc.setLocalDescription(offer);
 
-      socket.emit('call_user', { roomId, signalData: offer, type });
+      socket.emit('call_user', { roomId, signal: offer, type });
     } catch (err) {
       console.error("Failed to start call:", err);
       alert("Could not access camera/microphone.");
@@ -851,7 +851,7 @@ const Home = () => {
       });
       await pc.setLocalDescription(answer);
 
-      socket.emit('answer_call', { roomId, signalData: answer });
+      socket.emit('answer_call', { roomId, signal: answer });
     } catch (err) {
       console.error("Failed to answer call:", err);
       setIsVideoCall(false);
