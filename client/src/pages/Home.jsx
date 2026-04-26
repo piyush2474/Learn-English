@@ -253,6 +253,11 @@ const Home = () => {
     setMessages(prev => prev.filter(msg => msg.messageId !== messageId));
   };
 
+  const handleLeaveChat = () => {
+    endCall();
+    leaveChat();
+  };
+
   return (
     <div 
       className="fixed inset-0 w-full h-[100dvh] bg-[#0a0b14] flex overflow-hidden font-sans select-none"
@@ -295,7 +300,14 @@ const Home = () => {
         handleSendMessage={handleSendMessage}
         toggleMic={toggleMic}
         toggleCamera={toggleCamera}
-        switchCamera={() => {}} 
+        switchCamera={async () => {
+          const newMode = facingMode === 'user' ? 'environment' : 'user';
+          const success = await switchCamera(newMode);
+          if (success) {
+            setFacingMode(newMode);
+            setIsMirrored(newMode === 'user');
+          }
+        }} 
         clearChat={() => socket.emit('clear_chat', { roomId })}
         endCall={endCall}
         vcChatRef={vcChatRef}
@@ -324,7 +336,7 @@ const Home = () => {
       <Sidebar 
         status={status} 
         onNewChat={findPartner} 
-        onEndSession={leaveChat} 
+        onEndSession={handleLeaveChat} 
         userCount={userCount}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -353,7 +365,7 @@ const Home = () => {
           partnerName={partnerName}
           onOpenSidebar={() => setIsSidebarOpen(true)}
           onStartCall={startCall}
-          onEndSession={leaveChat}
+          onEndSession={handleLeaveChat}
           onSendFriendRequest={() => socket.emit('send_friend_request', { roomId })}
           showFriendAdd={partnerUserId && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
@@ -373,7 +385,7 @@ const Home = () => {
           <MatchmakingView 
             status={status}
             onStartSession={findPartner}
-            onCancelSearch={leaveChat}
+            onCancelSearch={handleLeaveChat}
           />
 
           {(status === 'Matched' || status === 'Disconnected' || roomId?.startsWith('private_')) && (

@@ -24,24 +24,29 @@ const useWebRTC = (roomId) => {
   const [remoteStream, setRemoteStream] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  const [localStream, setLocalStream] = useState(null);
   const peerConnection = useRef(null);
-  const localStream = useRef(null);
   const iceCandidatesQueue = useRef([]);
   const audioContext = useRef(null);
   const analyser = useRef(null);
   const animationFrame = useRef(null);
+
+  const roomIdRef = useRef(roomId);
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
 
   const endCall = () => {
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
     }
-    if (localStream.current) {
-      localStream.current.getTracks().forEach(track => track.stop());
-      localStream.current = null;
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      setLocalStream(null);
     }
     if (audioContext.current) {
-      audioContext.current.close();
+      audioContext.current.close().catch(() => {});
       audioContext.current = null;
     }
     if (animationFrame.current) {
@@ -54,24 +59,58 @@ const useWebRTC = (roomId) => {
     setCallAccepted(false);
     setIncomingSignal(null);
     setIsSpeaking(false);
+    setIsVideoCall(false);
+    setIsMicMuted(false);
+    setIsCameraOff(false);
   };
 
-  const createPeerConnection = (currentRoomId, type) => {
+  const switchCamera = async (facingMode) => {
+    if (!localStream) return;
+    try {
+      const oldTrack = localStream.getVideoTracks()[0];
+      if (oldTrack) oldTrack.stop();
+      
+      const newStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode } 
+      });
+      const newTrack = newStream.getVideoTracks()[0];
+      
+      const updatedStream = new MediaStream(localStream.getTracks());
+      const oldVideoTrack = updatedStream.getVideoTracks()[0];
+      if (oldVideoTrack) updatedStream.removeTrack(oldVideoTrack);
+      updatedStream.addTrack(newTrack);
+      
+      setLocalStream(updatedStream);
+      
+      if (peerConnection.current) {
+        const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) sender.replaceTrack(newTrack);
+      }
+      return true;
+    } catch (e) {
+      console.error("Camera switch failed:", e);
+      return false;
+    }
+  };
+
+  const createPeerConnection = (currentRoomId, type, stream) => {
     const pc = new RTCPeerConnection({ iceServers });
 
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit('ice_candidate', { roomId: currentRoomId, candidate: event.candidate });
+      if (event.candidate && roomIdRef.current) {
+        socket.emit('ice_candidate', { roomId: roomIdRef.current, candidate: event.candidate });
       }
     };
 
     pc.ontrack = (event) => {
-      setRemoteStream(event.streams[0]);
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
     };
 
-    if (localStream.current) {
-      localStream.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStream.current);
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
       });
     }
 
@@ -79,6 +118,7 @@ const useWebRTC = (roomId) => {
   };
 
   const startCall = async (type = 'audio') => {
+    if (!roomIdRef.current) return;
     try {
       setIsCalling(true);
       setIsVideoCall(type === 'video');
@@ -88,21 +128,23 @@ const useWebRTC = (roomId) => {
         audio: true
       });
       
-      localStream.current = stream;
-      peerConnection.current = createPeerConnection(roomId, type);
+      setLocalStream(stream);
+      peerConnection.current = createPeerConnection(roomIdRef.current, type, stream);
       
       const offer = await peerConnection.current.createOffer();
       await peerConnection.current.setLocalDescription(offer);
       
-      socket.emit('call_user', { roomId, signalData: offer, type });
+      socket.emit('call_user', { roomId: roomIdRef.current, signalData: offer, type });
       startAudioAnalysis(stream);
     } catch (err) {
       console.error("Failed to start call:", err);
-      endCall();
+      setIsCalling(false);
+      setIsVideoCall(false);
     }
   };
 
   const answerCall = async () => {
+    if (!roomIdRef.current || !incomingSignal) return;
     try {
       setCallAccepted(true);
       setIsReceivingCall(false);
@@ -112,14 +154,14 @@ const useWebRTC = (roomId) => {
         audio: true
       });
       
-      localStream.current = stream;
-      peerConnection.current = createPeerConnection(roomId, isVideoCall ? 'video' : 'audio');
+      setLocalStream(stream);
+      peerConnection.current = createPeerConnection(roomIdRef.current, isVideoCall ? 'video' : 'audio', stream);
       
       await peerConnection.current.setRemoteDescription(new RTCSessionDescription(incomingSignal));
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
       
-      socket.emit('answer_call', { roomId, signalData: answer });
+      socket.emit('answer_call', { roomId: roomIdRef.current, signalData: answer });
       startAudioAnalysis(stream);
 
       // Process queued candidates
@@ -134,6 +176,8 @@ const useWebRTC = (roomId) => {
   };
 
   const startAudioAnalysis = (stream) => {
+    if (audioContext.current) audioContext.current.close().catch(() => {});
+    
     const context = new (window.AudioContext || window.webkitAudioContext)();
     const source = context.createMediaStreamSource(stream);
     const node = context.createAnalyser();
@@ -147,7 +191,7 @@ const useWebRTC = (roomId) => {
     const dataArray = new Uint8Array(bufferLength);
 
     const checkVolume = () => {
-      if (!node) return;
+      if (audioContext.current?.state === 'closed') return;
       node.getByteFrequencyData(dataArray);
       let sum = 0;
       for (let i = 0; i < bufferLength; i++) {
@@ -160,54 +204,71 @@ const useWebRTC = (roomId) => {
   };
 
   useEffect(() => {
-    socket.on('incoming_call', (data) => {
+    const handleIncomingCall = (data) => {
       setIsReceivingCall(true);
       setIncomingSignal(data.signal);
       setIsVideoCall(data.type === 'video');
-    });
+    };
 
-    socket.on('call_accepted', async (signal) => {
+    const handleCallAccepted = async (signal) => {
       if (peerConnection.current) {
-        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-        setCallAccepted(true);
-        while (iceCandidatesQueue.current.length > 0) {
-          const candidate = iceCandidatesQueue.current.shift();
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+          setCallAccepted(true);
+          while (iceCandidatesQueue.current.length > 0) {
+            const candidate = iceCandidatesQueue.current.shift();
+            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        } catch (e) {
+          console.error("Error setting remote description:", e);
         }
       }
-    });
+    };
 
-    socket.on('call_ended', () => endCall());
-
-    socket.on('ice_candidate', async (candidate) => {
+    const handleIceCandidate = async (candidate) => {
       if (peerConnection.current && peerConnection.current.remoteDescription) {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("Error adding ice candidate:", e);
+        }
       } else {
         iceCandidatesQueue.current.push(candidate);
       }
-    });
+    };
+
+    socket.on('incoming_call', handleIncomingCall);
+    socket.on('call_accepted', handleCallAccepted);
+    socket.on('call_ended', endCall);
+    socket.on('partner_disconnected', endCall);
+    socket.on('ice_candidate', handleIceCandidate);
 
     return () => {
-      socket.off('incoming_call');
-      socket.off('call_accepted');
-      socket.off('call_ended');
-      socket.off('ice_candidate');
+      socket.off('incoming_call', handleIncomingCall);
+      socket.off('call_accepted', handleCallAccepted);
+      socket.off('call_ended', endCall);
+      socket.off('partner_disconnected', endCall);
+      socket.off('ice_candidate', handleIceCandidate);
     };
-  }, [roomId]);
+  }, []); // Static listeners, uses internal endCall
 
   const toggleMic = () => {
-    if (localStream.current) {
-      const audioTrack = localStream.current.getAudioTracks()[0];
-      audioTrack.enabled = !audioTrack.enabled;
-      setIsMicMuted(!audioTrack.enabled);
+    if (localStream) {
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMicMuted(!audioTrack.enabled);
+      }
     }
   };
 
   const toggleCamera = () => {
-    if (localStream.current) {
-      const videoTrack = localStream.current.getVideoTracks()[0];
-      videoTrack.enabled = !videoTrack.enabled;
-      setIsCameraOff(!videoTrack.enabled);
+    if (localStream) {
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsCameraOff(!videoTrack.enabled);
+      }
     }
   };
 
@@ -225,12 +286,15 @@ const useWebRTC = (roomId) => {
     startCall,
     answerCall,
     endCall: () => {
-      socket.emit('end_call', { roomId });
+      if (roomIdRef.current) {
+        socket.emit('end_call', { roomId: roomIdRef.current });
+      }
       endCall();
     },
     toggleMic,
     toggleCamera,
-    localStream: localStream.current
+    switchCamera,
+    localStream
   };
 };
 
