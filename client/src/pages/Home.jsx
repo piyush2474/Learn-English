@@ -48,6 +48,50 @@ const Home = () => {
     roomIdRef.current = roomId;
   }, [sharedKey, myKeyPair, roomId]);
 
+  // --- Pull to Refresh ---
+  const [pullOffset, setPullOffset] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const pullStartY = useRef(0);
+
+  const handleTouchStartRefresh = (e) => {
+    // Only allow if we are at the top and not in a scrollable area that's already scrolled
+    pullStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMoveRefresh = (e) => {
+    if (pullStartY.current === 0) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - pullStartY.current;
+    
+    // Only pull down if at the very top
+    if (diff > 0 && window.scrollY === 0) {
+      setIsPulling(true);
+      // Logarithmic pull for premium feel
+      const newOffset = Math.min(diff * 0.5, 120);
+      setPullOffset(newOffset);
+      
+      // Prevent default browser behavior if we're pulling
+      if (newOffset > 10 && e.cancelable) {
+        e.preventDefault();
+      }
+    }
+  };
+
+  const handleTouchEndRefresh = () => {
+    if (pullOffset > 90) {
+      // Trigger refresh
+      setPullOffset(100);
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } else {
+      setIsPulling(false);
+      setPullOffset(0);
+    }
+    pullStartY.current = 0;
+  };
+
+  // --- Draggable Status Bar ---
   const [statusBarY, setStatusBarY] = useState(24);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartY = useRef(0);
@@ -1144,7 +1188,26 @@ const Home = () => {
   };
 
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] bg-[#0a0b14] flex overflow-hidden font-sans select-none">
+    <div 
+      className="fixed inset-0 w-full h-[100dvh] bg-[#0a0b14] flex overflow-hidden font-sans select-none"
+      onTouchStart={handleTouchStartRefresh}
+      onTouchMove={handleTouchMoveRefresh}
+      onTouchEnd={handleTouchEndRefresh}
+    >
+      {/* Pull to Refresh Indicator */}
+      {pullOffset > 0 && (
+        <div 
+          className="fixed top-0 left-0 right-0 z-[1000] flex justify-center pointer-events-none"
+          style={{ transform: `translateY(${pullOffset - 40}px)`, opacity: Math.min(pullOffset / 60, 1) }}
+        >
+          <div className="bg-[#1a1c2e] border border-white/10 p-3 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.2)] flex items-center justify-center">
+            <RefreshCw 
+              className={`w-5 h-5 text-blue-400 ${pullOffset > 90 ? 'animate-spin' : ''}`}
+              style={{ transform: `rotate(${pullOffset * 3}deg)` }}
+            />
+          </div>
+        </div>
+      )}
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
