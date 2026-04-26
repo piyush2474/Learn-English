@@ -15,13 +15,18 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
   return (
     <div 
       ref={scrollRef}
-      className="flex-1 overflow-y-auto scrollbar-hide flex flex-col bg-[#212121] relative"
+      className="flex-1 overflow-y-auto scrollbar-hide flex flex-col bg-[#0a0b14] relative"
     >
       <div className="flex-1 flex flex-col min-h-0 relative z-10">
         {messages.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-4 space-y-6">
-            <h1 className="text-4xl font-bold text-white tracking-tight">Elite Chat</h1>
-            <p className="text-gray-400 max-w-sm">Connect, share, and chat privately in real-time.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-4 space-y-6 animate-in fade-in zoom-in duration-700">
+            <div className="w-20 h-20 rounded-3xl gradient-primary flex items-center justify-center shadow-2xl shadow-primary/20 mb-4 rotate-3">
+              <Globe className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-4xl font-black text-white tracking-tighter">Aura</h1>
+            <p className="text-gray-500 max-w-sm text-sm leading-relaxed">
+              Experience the next generation of private messaging. Secure, real-time, and beautifully simple.
+            </p>
           </div>
         )}
         

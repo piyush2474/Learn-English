@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, GraduationCap, LogOut, MessageCircle, Maximize2 } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, LogOut, MessageCircle, Maximize2, Shield } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -88,7 +88,7 @@ const Home = () => {
 
   // --- Stealth Mode Metadata & Call Suppression ---
   useEffect(() => {
-    const originalTitle = "Elite Chat";
+    const originalTitle = "Aura";
     
     if (isStealthMode) {
       document.title = "System Task Manager";
@@ -1107,7 +1107,7 @@ const Home = () => {
   };
 
   return (
-    <div className="fixed inset-0 w-full h-full h-[100dvh] bg-[#212121] flex overflow-hidden font-sans">
+    <div className="fixed inset-0 w-full h-[100dvh] bg-[#0a0b14] flex overflow-hidden font-sans select-none">
       {/* Hidden Audio for remote stream */}
       <audio ref={remoteAudioRef} autoPlay />
 
@@ -1241,7 +1241,7 @@ const Home = () => {
       
       {/* Incoming Call Modal */}
       {isReceivingCall && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 h-[100dvh]">
           <div className="bg-[#2f2f2f] p-8 rounded-3xl border border-white/10 text-center max-w-sm w-full shadow-2xl">
             <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse ${callType === 'video' ? 'bg-blue-500/20' : 'bg-green-500/20'}`}>
               {callType === 'video' ? <Video className="w-10 h-10 text-blue-500" /> : <Phone className="w-10 h-10 text-green-500" />}
@@ -1324,7 +1324,7 @@ const Home = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#212121]">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#0a0b14]">
         {!isSocketConnected && (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-4 bg-[#2f2f2f]/90 backdrop-blur-md border border-blue-500/30 px-6 py-3 rounded-2xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
             <div className="relative">
@@ -1336,77 +1336,79 @@ const Home = () => {
             </div>
           </div>
         )}
-        {/* Header (Fixed height) */}
-        <header 
-          className="h-[60px] shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#212121] z-30 cursor-pointer select-none"
-        >
+        {/* Header */}
+        <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0a0b14]/80 backdrop-blur-md z-40">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="md:hidden p-1 hover:bg-white/5 rounded-lg"
+              className="p-2 -ml-2 md:hidden hover:bg-white/5 rounded-lg transition-colors"
             >
-              <Menu className="w-6 h-6 text-gray-400" />
+              <Menu className="w-5 h-5 text-gray-300" />
             </button>
-            <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg font-black text-white truncate max-w-[160px] sm:max-w-none tracking-tight">
-                {status === 'Matched' && partnerUserId 
-                  ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger')
-                  : 'Elite Chat'}
-              </span>
-              {status === 'Matched' ? (
-                (() => {
-                  const friend = friends.find(f => f.userId === partnerUserId);
-                  const isOnline = friend ? friend.isOnline : true; // Default true for random matches
-                  return isOnline ? (
-                    <span className="text-[10px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Live
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-white/5 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 border border-white/5">
-                       <div className="w-1.5 h-1.5 bg-gray-500 rounded-full" /> Offline
-                    </span>
-                  );
-                })()
-              ) : status === 'Waiting' ? (
-                <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
-                   Finding...
-                </span>
-              ) : null}
+            
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[15px] font-bold text-white tracking-tight leading-none">
+                    {status === 'Matched' ? partnerName : 'Aura'}
+                  </h2>
+                  <div className={`w-2 h-2 rounded-full ${status === 'Matched' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-500'}`} />
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                    {status === 'Matched' ? 'Active Chat' : 'Secured Gateway'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            {status === 'Matched' && (
+              <>
+                <button 
+                  onClick={() => setIsInformModalOpen(true)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                  title="Share Info"
+                >
+                  <Globe className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => onStartCall('audio')}
+                  className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/5 rounded-lg transition-all"
+                >
+                  <Phone className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => onStartCall('video')}
+                  className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+                >
+                  <Video className="w-5 h-5" />
+                </button>
+              </>
+            )}
+            
             {(status === 'Matched' || status === 'Waiting' || status === 'Disconnected') && (
-              <button onClick={endSession} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="End Session">
+              <button 
+                onClick={endSession} 
+                className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/5 rounded-lg transition-all" 
+                title="End Session"
+              >
                 <LogOut className="w-5 h-5" />
               </button>
             )}
-            
-            {(status === 'Matched' || status === 'Disconnected') && roomId && (
-              <>
-                {/* Clear Chat (Private Only) */}
-                {roomId.startsWith('private_') && (
-                  <button onClick={clearChat} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg" title="Clear Chat History">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
 
-                {/* Friend Logic */}
-                {(() => {
-                  // Skip for global or special rooms
-                  if (roomId === 'global' || roomId === 'practice_with_you') return null;
-
-                  const isAlreadyFriend = friends.some(f => f.userId === partnerUserId);
-
-                  if (isAlreadyFriend || !partnerUserId) return null;
-
-                  return (
-                    <button onClick={sendFriendRequest} className="p-2 hover:bg-white/5 rounded-lg text-blue-400" title="Add Friend">
-                      <UserPlus className="w-5 h-5" />
-                    </button>
-                  );
-                })()}
-              </>
+            {status === 'Matched' && partnerUserId && !friends.some(f => f.userId === partnerUserId) && (
+              <button 
+                onClick={sendFriendRequest} 
+                className="p-2 text-primary hover:bg-primary/5 rounded-lg transition-all" 
+                title="Add Friend"
+              >
+                <UserPlus className="w-5 h-5" />
+              </button>
             )}
           </div>
         </header>
@@ -1446,32 +1448,20 @@ const Home = () => {
               {status === 'Idle' ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 animate-in fade-in duration-700">
                   <div className="max-w-md space-y-6">
-                    <div className="w-24 h-24 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 transform hover:rotate-12 transition-transform duration-500 shadow-2xl shadow-blue-500/5">
-                      <Globe className="w-12 h-12 text-blue-500" />
+                    <div className="w-24 h-24 gradient-primary rounded-[40px] flex items-center justify-center mx-auto mb-8 transform hover:scale-110 transition-transform duration-500 shadow-2xl shadow-primary/20">
+                      <Shield className="w-12 h-12 text-white" />
                     </div>
-                    <h1 className="text-6xl font-extrabold text-white tracking-tighter">Practice <br/><span className="text-blue-500">English</span></h1>
+                    <h1 className="text-6xl font-black text-white tracking-tighter">Aura <br/><span className="text-primary">Chat</span></h1>
+                    <p className="text-gray-500 text-lg font-medium">Connect with the world, securely.</p>
                   </div>
 
                   <button 
                     onClick={findNewPartner}
-                    className="group relative flex items-center gap-4 bg-white hover:bg-gray-200 text-black px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-white/5"
+                    className="group relative flex items-center gap-4 gradient-primary hover:opacity-90 text-white px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-primary/20"
                   >
-                    <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                      <Plus className="w-5 h-5 text-black" />
-                    </div>
-                    <span>Start Learning</span>
+                    <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                    Start Aura Session
                   </button>
-
-                  <div className="flex items-center gap-6 text-sm text-gray-500 font-medium pt-8">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      <span>{userCount} Learners Online</span>
-                    </div>
-                    <span>•</span>
-                    <span>Secure</span>
-                    <span>•</span>
-                    <span>Global</span>
-                  </div>
                 </div>
               ) : status === 'Waiting' ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 animate-in zoom-in duration-500">
@@ -1515,9 +1505,9 @@ const Home = () => {
             </>
         </main>
 
-        {/* Input Area (Fixed height at bottom) */}
+        {/* Input Area */}
         {status !== 'Idle' && !isStealthMode && (
-          <footer className="shrink-0 w-full max-w-3xl mx-auto px-4 pb-6 pt-2 z-20">
+          <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pb-6 pt-2 z-20">
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -1527,13 +1517,13 @@ const Home = () => {
             />
             <form 
               onSubmit={handleSendMessage}
-              className="relative flex items-center bg-[#2f2f2f] rounded-[24px] sm:rounded-[26px] border border-[#3d3d3d] focus-within:border-gray-500 transition-colors shadow-2xl"
+              className="relative flex items-center bg-[#1a1c2e]/80 backdrop-blur-xl rounded-[28px] border border-white/10 focus-within:border-primary/50 transition-all shadow-2xl shadow-black/40"
             >
               <button
                 type="button"
                 onClick={() => fileInputRef.current.click()}
                 disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
-                className="pl-3 sm:pl-4 pr-1 sm:pr-2 text-gray-400 hover:text-white transition-colors"
+                className="pl-4 pr-2 text-gray-400 hover:text-primary transition-colors"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -1543,7 +1533,7 @@ const Home = () => {
                 onChange={handleTyping}
                 disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
                 placeholder="Message..."
-                className="w-full bg-transparent text-white px-3 sm:px-5 py-3 sm:py-4 pr-12 resize-none focus:outline-none min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-48 scrollbar-hide text-[15px]"
+                className="w-full bg-transparent text-white px-3 py-4 pr-12 resize-none focus:outline-none min-h-[56px] max-h-48 scrollbar-hide text-[15px]"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1554,17 +1544,17 @@ const Home = () => {
               <button
                 type="submit"
                 disabled={(status !== 'Matched' && !roomId?.startsWith('private_')) || !inputText.trim()}
-                className={`absolute right-1.5 sm:right-2 p-1.5 rounded-xl transition-all ${
+                className={`absolute right-2 p-2 rounded-2xl transition-all ${
                   inputText.trim() && status === 'Matched' 
-                    ? 'bg-white text-black' 
-                    : 'bg-[#404040] text-[#171717]'
-                } ${status !== 'Matched' && roomId?.startsWith('private_') ? 'bg-blue-600 text-white' : ''}`}
+                    ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                    : 'bg-white/5 text-gray-600'
+                } ${status !== 'Matched' && roomId?.startsWith('private_') ? 'bg-primary text-white' : ''}`}
               >
-                <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+                <Send className="w-5 h-5" />
               </button>
             </form>
-            <p className="hidden sm:block text-[11px] text-center text-gray-500 mt-3 font-medium">
-              Elite Chat provides a secure space for real-time private conversations.
+            <p className="hidden sm:block text-[10px] text-center text-gray-500 mt-4 font-bold uppercase tracking-widest opacity-40">
+              Aura Platform &bull; End-to-End Encrypted Secure Tunnel
             </p>
           </footer>
         )}
@@ -1717,8 +1707,8 @@ const Home = () => {
           {/* Header for Modal */}
           <div className="absolute top-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
             <div className="flex flex-col pointer-events-auto">
-              <span className="text-white font-bold text-lg">Image View</span>
-              <span className="text-gray-400 text-xs">Shared via Learn English</span>
+              <span className="text-white font-bold text-lg">Aura View</span>
+              <span className="text-gray-400 text-xs">Securely Shared Media</span>
             </div>
             <div className="flex items-center gap-4 pointer-events-auto">
               <button 

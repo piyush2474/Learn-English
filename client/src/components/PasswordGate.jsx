@@ -26,7 +26,7 @@ const PasswordGate = ({ children }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a] font-sans">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a] font-sans h-[100dvh] overflow-hidden">
       <div className="w-full max-w-md px-6 py-12 text-center">
         {/* Decorative Background Glows */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none"></div>
@@ -41,9 +41,7 @@ const PasswordGate = ({ children }) => {
             <h1 className="text-3xl font-bold tracking-tight text-white">
               Protected Access
             </h1>
-            <p className="text-gray-400 text-sm">
-              Please enter the password to continue
-            </p>
+
           </div>
 
           {/* Form Section */}
@@ -86,11 +84,7 @@ const PasswordGate = ({ children }) => {
             </button>
           </form>
 
-          {/* Big Password Hint for Friends */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mt-8 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] mb-2 font-black">Password Hint</p>
-            <p className="text-3xl font-black text-blue-400 tracking-widest">Mishu24</p>
-          </div>
+
 
           {/* Footer Text */}
           <div className="text-gray-600 text-xs uppercase tracking-widest pt-4">
