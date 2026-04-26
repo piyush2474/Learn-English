@@ -174,7 +174,7 @@ const Home = () => {
 
     socket.on('inform_sent', handleInformSent);
     socket.on('vault_status_updated', handleVaultStatus);
-    socket.on('vault_verified', handleVaultVerified);
+    socket.on('vault_verify_result', handleVaultVerified);
     socket.on('password_set', handlePasswordSet);
 
     const handleVisibilityChange = () => {
@@ -185,7 +185,7 @@ const Home = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off('inform_sent', handleInformSent);
       socket.off('vault_status_updated', handleVaultStatus);
-      socket.off('vault_verified', handleVaultVerified);
+      socket.off('vault_verify_result', handleVaultVerified);
       socket.off('password_set', handlePasswordSet);
     };
   }, []);

@@ -434,26 +434,37 @@ io.on("connection", (socket) => {
     const { password } = data;
     if (!socket.userId || !password) return;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await User.findOneAndUpdate(
-      { userId: socket.userId },
-      { vaultPassword: hashedPassword, isVaultEnabled: true }
-    );
-    socket.emit("vault_status", { isVaultEnabled: true, message: "Vault enabled successfully" });
+    try {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await User.findOneAndUpdate(
+        { userId: socket.userId },
+        { vaultPassword: hashedPassword, isVaultEnabled: true }
+      );
+      socket.emit("password_set", { success: true, isVaultEnabled: true, message: "Vault enabled successfully" });
+      socket.emit("vault_status_updated", { isVaultEnabled: true });
+    } catch (e) {
+      console.error("Set vault password error:", e);
+      socket.emit("password_set", { success: false, error: "Internal server error" });
+    }
   });
 
   socket.on("verify_vault_password", async (data) => {
     const { password } = data;
     if (!socket.userId || !password) return;
 
-    const user = await User.findOne({ userId: socket.userId });
-    if (!user || !user.vaultPassword) {
-      socket.emit("vault_verify_result", { success: false, error: "Vault not setup" });
-      return;
-    }
+    try {
+      const user = await User.findOne({ userId: socket.userId });
+      if (!user || !user.vaultPassword) {
+        socket.emit("vault_verify_result", { success: false, error: "Vault not setup" });
+        return;
+      }
 
-    const match = await bcrypt.compare(password, user.vaultPassword);
-    socket.emit("vault_verify_result", { success: match });
+      const match = await bcrypt.compare(password, user.vaultPassword);
+      socket.emit("vault_verify_result", { success: match });
+    } catch (e) {
+      console.error("Vault verify error:", e);
+      socket.emit("vault_verify_result", { success: false, error: "Internal server error" });
+    }
   });
 
   socket.on("change_vault_password", async (data) => {
@@ -484,20 +495,29 @@ io.on("connection", (socket) => {
     const { enabled, password } = data;
     if (!socket.userId) return;
 
-    const user = await User.findOne({ userId: socket.userId });
-    if (!user) return;
+    try {
+      const user = await User.findOne({ userId: socket.userId });
+      if (!user) return;
 
-    // Must verify password to toggle off
-    if (!enabled && user.vaultPassword) {
-      const match = await bcrypt.compare(password, user.vaultPassword);
-      if (!match) {
-        socket.emit("vault_status", { success: false, error: "Incorrect password" });
-        return;
+      // Must verify password to toggle off
+      if (!enabled && user.vaultPassword) {
+        if (!password) {
+          socket.emit("vault_status", { success: false, error: "Password required to disable vault" });
+          return;
+        }
+        const match = await bcrypt.compare(password, user.vaultPassword);
+        if (!match) {
+          socket.emit("vault_status", { success: false, error: "Incorrect password" });
+          return;
+        }
       }
-    }
 
-    await User.findOneAndUpdate({ userId: socket.userId }, { isVaultEnabled: enabled });
-    socket.emit("vault_status", { success: true, isVaultEnabled: enabled });
+      await User.findOneAndUpdate({ userId: socket.userId }, { isVaultEnabled: enabled });
+      socket.emit("vault_status_updated", { isVaultEnabled: enabled, success: true });
+    } catch (e) {
+      console.error("Toggle vault error:", e);
+      socket.emit("vault_status", { success: false, error: "Internal server error" });
+    }
   });
 
 
