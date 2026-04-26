@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Shield, Phone, Video, LogOut, UserPlus } from 'lucide-react';
+import { Menu, Shield, Phone, Video, LogOut, UserPlus, Trash2 } from 'lucide-react';
 
 const ChatHeader = ({
   status,
@@ -10,7 +10,8 @@ const ChatHeader = ({
   onSendFriendRequest,
   showFriendAdd,
   partnerUserId,
-  partnerStatus
+  partnerStatus,
+  onClearChat
 }) => {
   return (
     <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0a0b14]/80 backdrop-blur-md z-40">
@@ -77,6 +78,16 @@ const ChatHeader = ({
             title="Add Friend"
           >
             <UserPlus className="w-5 h-5" />
+          </button>
+        )}
+
+        {(status === 'Matched' || status === 'Disconnected') && (
+          <button 
+            onClick={onClearChat} 
+            className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/5 rounded-lg transition-all" 
+            title="Clear Chat"
+          >
+            <Trash2 className="w-5 h-5" />
           </button>
         )}
       </div>

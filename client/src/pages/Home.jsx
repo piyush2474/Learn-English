@@ -142,6 +142,9 @@ const Home = () => {
 
     const handleVaultStatus = (data) => {
       useStore.getState().setIsVaultEnabled(data.isVaultEnabled);
+      if (data.success) {
+        setShowVaultGate(null);
+      }
       if (data.isVaultEnabled) {
         setIsVaultUnlocked(false);
       }
@@ -199,7 +202,7 @@ const Home = () => {
 
   const handleToggleVault = () => {
     if (isVaultEnabled) {
-      socket.emit('toggle_vault', { enabled: false });
+      setShowVaultGate('verify'); // Require PIN to disable
     } else {
       setShowVaultGate('setup');
     }
@@ -219,6 +222,12 @@ const Home = () => {
       console.error("Failed to fetch word", e);
     } finally {
       setIsFetchingWord(false);
+    }
+  };
+
+  const handleClearChat = () => {
+    if (window.confirm("Are you sure you want to clear this chat? This will delete all messages permanently from the database.")) {
+      socket.emit('clear_chat', { roomId });
     }
   };
 
@@ -424,7 +433,7 @@ const Home = () => {
             setIsMirrored(newMode === 'user');
           }
         }} 
-        clearChat={() => socket.emit('clear_chat', { roomId })}
+        clearChat={handleClearChat}
         endCall={endCall}
         vcChatRef={vcChatRef}
       />
@@ -490,6 +499,7 @@ const Home = () => {
               ? (friends.find(f => f.userId === partnerUserId)?.isOnline ? 'Online' : 'Offline') 
               : null
           }
+          onClearChat={handleClearChat}
         />
 
         <main className="flex-1 overflow-hidden relative flex flex-col">
@@ -639,7 +649,13 @@ const Home = () => {
         <VaultGate 
           mode={showVaultGate}
           onClose={() => setShowVaultGate(null)}
-          onUnlock={(pin) => socket.emit('verify_vault_password', { password: pin })}
+          onUnlock={(pin) => {
+            if (isSettingsOpen && isVaultEnabled) {
+              socket.emit('toggle_vault', { enabled: false, password: pin });
+            } else {
+              socket.emit('verify_vault_password', { password: pin });
+            }
+          }}
           onSetPassword={(pin) => socket.emit('set_vault_password', { password: pin })}
         />
       )}
