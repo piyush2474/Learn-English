@@ -225,7 +225,16 @@ const Home = () => {
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.stunprotocol.org' },
     { urls: 'stun:stun.sipgate.net:10000' },
-    { urls: 'stun:global.stun.twilio.com:3478' }
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    // TURN servers are necessary for connecting between different networks (Mobile to WiFi)
+    // You can get free TURN credentials from services like Metered.ca or Twilio
+    /* 
+    {
+      urls: 'turn:your-turn-server.com:3478',
+      username: 'your-username',
+      credential: 'your-password'
+    }
+    */
   ];
 
   useEffect(() => {
@@ -341,34 +350,7 @@ const Home = () => {
       }
     });
 
-    socket.on('rejoined', async (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setPartnerUserId(data.partnerUserId);
-      
-      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
-      if (savedKey) {
-        try {
-          const key = await importSharedKey(savedKey);
-          setSharedKey(key);
-          sharedKeyRef.current = key;
-        } catch (e) { console.error("Failed to restore shared key", e); }
-      }
-      
-      const currentId = localStorage.getItem('chat_user_id');
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoin_failed', () => {
-      sessionStorage.removeItem('current_room_id');
-      setStatus('Idle');
-    });
+    // (Redundant rejoint/rejoin_failed removed)
 
     socket.on('exchange_keys', async (data) => {
       if (myKeyPairRef.current && data.publicKey) {
@@ -454,8 +436,10 @@ const Home = () => {
       setMessages([]);
     });
 
-    socket.on('messages_marked_seen', () => {
-      setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
+    socket.on('messages_marked_seen', (data) => {
+      if (data.roomId === roomIdRef.current) {
+        setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
+      }
     });
 
     socket.on('vault_verify_result', (data) => {
@@ -672,13 +656,24 @@ const Home = () => {
       iceServers,
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
-      rtcpMuxPolicy: 'require'
+      rtcpMuxPolicy: 'require',
+      iceTransportPolicy: 'all' // Allows relay candidates (TURN)
     });
+
+    pc.onicecandidateerror = (e) => {
+      console.warn("WebRTC: ICE Candidate Error:", e.errorCode, e.errorText);
+    };
 
     let iceRestartCount = 0;
     pc.oniceconnectionstatechange = () => {
-      console.log("WebRTC: ICE Connection State:", pc.iceConnectionState);
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      const state = pc.iceConnectionState;
+      console.log("WebRTC: ICE Connection State:", state);
+      
+      if (state === 'connected' || state === 'completed') {
+        console.log("WebRTC: Connection established successfully!");
+      }
+
+      if (state === 'failed' || state === 'disconnected') {
         if (iceRestartCount < 2) {
           console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
           pc.restartIce();
@@ -687,9 +682,9 @@ const Home = () => {
             return pc.setLocalDescription(offer).then(() => {
               socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
             });
-          }).catch(e => console.error("ICE Restart signaling failed:", e));
+          }).catch(err => console.error("ICE Restart signaling failed:", err));
         } else {
-          console.warn("WebRTC: Connection failed after retries. A TURN server is required for this network.");
+          console.warn("WebRTC: Connection failed after retries. A TURN server is likely required for this network.");
         }
       }
     };
@@ -920,14 +915,15 @@ const Home = () => {
     const messageData = {
       message: encryptedText,
       roomId,
-      senderId: myUserId, // Use persistent ID instead of socket.id
+      senderId: myUserId,
       type: 'text',
+      status: 'sent',
       messageId,
       timestamp: new Date().toISOString()
     };
 
     socket.emit('send_message', messageData);
-    setMessages((prev) => [...prev, { ...messageData, message: inputText }]);
+    setMessages((prev) => [...prev, { ...messageData, message: inputText, status: 'sent' }]);
     setInputText('');
     socket.emit('typing', { roomId, isTyping: false });
   };
@@ -1004,6 +1000,7 @@ const Home = () => {
         roomId,
         senderId: myUserId,
         type: 'image',
+        status: 'sent',
         messageId,
         timestamp: new Date().toISOString()
       };
@@ -1020,7 +1017,7 @@ const Home = () => {
 
       setMessages((prev) => prev.map(m => 
         m.messageId === messageId 
-          ? { ...m, message: localDisplay, isUploading: false, rawContent: finalMessage } 
+          ? { ...m, message: localDisplay, isUploading: false, rawContent: finalMessage, status: 'sent' } 
           : m
       ));
       setPartnerMediaStatus(null);

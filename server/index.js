@@ -364,13 +364,22 @@ io.on("connection", (socket) => {
 
   socket.on("mark_messages_seen", async (data) => {
     const { roomId, userId } = data;
+    if (!roomId) return;
+
+    // Persist seen status in DB if it's a private chat
     if (roomId.startsWith('private_')) {
-      await Message.updateMany(
-        { roomId, senderId: { $ne: userId }, status: 'sent' },
-        { status: 'seen' }
-      );
-      socket.to(roomId).emit("messages_marked_seen", { roomId });
+      try {
+        await Message.updateMany(
+          { roomId, senderId: { $ne: userId }, status: 'sent' },
+          { status: 'seen' }
+        );
+      } catch (e) {
+        console.error("Failed to update message status in DB:", e);
+      }
     }
+    
+    // Always relay the 'seen' event to the partner so the UI updates
+    socket.to(roomId).emit("messages_marked_seen", { roomId });
   });
 
   socket.on("start_private_chat", async (data) => {
