@@ -146,8 +146,30 @@ const Home = () => {
       }
     };
 
+    const handleVaultVerified = (data) => {
+      if (data.success) {
+        setIsVaultUnlocked(true);
+        setShowVaultGate(null);
+        if (pendingPrivateChatId) {
+          socket.emit("start_private_chat", { friendId: pendingPrivateChatId });
+          setMessages([]);
+          setPendingPrivateChatId(null);
+        }
+      } else {
+        window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
+      }
+    };
+
+    const handlePasswordSet = (data) => {
+      if (data.success) {
+        setShowVaultGate(null);
+      }
+    };
+
     socket.on('inform_sent', handleInformSent);
     socket.on('vault_status_updated', handleVaultStatus);
+    socket.on('vault_verified', handleVaultVerified);
+    socket.on('password_set', handlePasswordSet);
 
     const handleVisibilityChange = () => {
       if (document.hidden) setIsVaultUnlocked(false);
@@ -157,8 +179,10 @@ const Home = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off('inform_sent', handleInformSent);
       socket.off('vault_status_updated', handleVaultStatus);
+      socket.off('vault_verified', handleVaultVerified);
+      socket.off('password_set', handlePasswordSet);
     };
-  }, []);
+  }, [pendingPrivateChatId]);
 
   // Sync name input when settings opens
   useEffect(() => {
