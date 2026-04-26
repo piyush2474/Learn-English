@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, LogOut, MessageCircle, Maximize2, Shield } from 'lucide-react';
+import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, LogOut, MessageCircle, Maximize2, Shield, GripVertical } from 'lucide-react';
 import { socket } from '../socket/socket';
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
@@ -47,6 +47,43 @@ const Home = () => {
     myKeyPairRef.current = myKeyPair;
     roomIdRef.current = roomId;
   }, [sharedKey, myKeyPair, roomId]);
+
+  const [statusBarY, setStatusBarY] = useState(24);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragStartStatusBarY = useRef(0);
+
+  const handleDragStart = (e) => {
+    setIsDragging(true);
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    dragStartStatusBarY.current = statusBarY;
+  };
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!isDragging) return;
+      const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+      const deltaY = clientY - dragStartY.current;
+      const newY = Math.max(10, Math.min(window.innerHeight - 100, dragStartStatusBarY.current + deltaY));
+      setStatusBarY(newY);
+    };
+
+    const handleEnd = () => setIsDragging(false);
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', handleMove);
+      window.addEventListener('touchend', handleEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDragging, statusBarY]);
 
   // --- Calling States ---
   const [isCalling, setIsCalling] = useState(false);
@@ -1249,15 +1286,16 @@ const Home = () => {
 
           <div className="relative bg-[#1a1c2e]/60 border border-white/10 backdrop-blur-2xl p-10 rounded-[40px] text-center max-w-sm w-full shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-300">
             {/* Call Type Icon */}
-            <div className="relative mx-auto mb-8">
-              <div className={`w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto relative z-10 shadow-2xl transition-all duration-500 ${
+            <div className="relative mx-auto mb-10 w-24 h-24">
+              <div className={`w-full h-full rounded-[32px] flex items-center justify-center relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.3)] transition-all duration-500 ${
                 callType === 'video' ? 'bg-blue-600' : 'bg-green-600'
               }`}>
                 {callType === 'video' ? <Video className="w-10 h-10 text-white" /> : <Phone className="w-10 h-10 text-white" />}
               </div>
-              {/* Pulsing rings */}
-              <div className={`absolute inset-0 rounded-[32px] animate-ping opacity-20 ${callType === 'video' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
-              <div className={`absolute inset-0 rounded-[32px] animate-ping opacity-10 delay-300 ${callType === 'video' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+              {/* Premium Pulsing Rings */}
+              <div className={`absolute inset-0 rounded-[32px] animate-pulse-soft opacity-30 blur-[2px] ${callType === 'video' ? 'bg-blue-400' : 'bg-green-400'}`}></div>
+              <div className={`absolute inset-0 rounded-[32px] animate-pulse-soft opacity-20 blur-[6px]`} style={{ animationDelay: '0.6s', backgroundColor: callType === 'video' ? '#60a5fa' : '#4ade80' }}></div>
+              <div className={`absolute inset-0 rounded-[32px] border-2 animate-pulse-soft opacity-40`} style={{ animationDelay: '1.2s', borderColor: callType === 'video' ? '#60a5fa' : '#4ade80' }}></div>
             </div>
 
             <div className="space-y-2 mb-10">
@@ -1290,36 +1328,48 @@ const Home = () => {
         </div>
       )}
 
-      {/* In-Call Status Bar */}
+      {/* In-Call Draggable Status Bar */}
       {(isCalling || callAccepted) && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[80] bg-[#2f2f2f] border px-6 py-2 rounded-full shadow-2xl flex items-center gap-4 transition-all duration-300 ${
-          isSpeaking ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'border-green-500/30'
-        }`}>
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-green-500 animate-ping' : 'bg-green-500'}`} />
-            <span className="text-sm font-medium text-white flex items-center gap-2">
-              {callAccepted ? "On Call" : "Calling..."}
-              {isSpeaking && <Mic className="w-3 h-3 text-green-500" />}
-            </span>
+        <div 
+          style={{ top: `${statusBarY}px` }}
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          className={`fixed left-1/2 -translate-x-1/2 z-[80] bg-black/60 backdrop-blur-xl border px-4 py-2 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-3 transition-all cursor-move select-none active:scale-[0.98] ${
+            isSpeaking ? 'border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]' : 'border-white/10'
+          }`}
+        >
+          {/* Drag Handle */}
+          <div className="p-1 text-gray-600 hover:text-gray-400 transition-colors">
+            <GripVertical className="w-4 h-4" />
           </div>
 
-          <div className="h-4 w-[1px] bg-white/10 mx-1" />
+          <div className="flex items-center gap-2 pr-1">
+            <div className={`w-2.5 h-2.5 rounded-full relative ${isSpeaking ? 'bg-green-500' : 'bg-gray-600'}`}>
+              {isSpeaking && <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></div>}
+            </div>
+            <span className="text-[13px] font-bold text-white tracking-tight whitespace-nowrap">
+              {callAccepted ? "On Call" : "Calling..."}
+            </span>
+            {isSpeaking && <Mic className="w-3.5 h-3.5 text-green-500 animate-pulse" />}
+          </div>
 
-          <div className="flex items-center gap-2">
+          <div className="h-5 w-[1px] bg-white/10 mx-1" />
+
+          <div className="flex items-center gap-1.5">
             <button 
-              onClick={() => setIsSpeakerMode(!isSpeakerMode)}
+              onClick={(e) => { e.stopPropagation(); setIsSpeakerMode(!isSpeakerMode); }}
               title={isSpeakerMode ? "Switch to Ear Mode" : "Switch to Speaker Mode"}
-              className={`p-1.5 rounded-lg transition-colors ${
-                isSpeakerMode ? 'bg-green-500 text-black' : 'hover:bg-white/5 text-gray-400'
+              className={`p-2 rounded-xl transition-all ${
+                isSpeakerMode ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'hover:bg-white/5 text-gray-400'
               }`}
             >
               {isSpeakerMode ? <Volume2 className="w-4 h-4" /> : <Volume1 className="w-4 h-4" />}
             </button>
 
             <button 
-              onClick={endCall}
+              onClick={(e) => { e.stopPropagation(); endCall(); }}
               title="End Call"
-              className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
+              className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-500 rounded-xl transition-all border border-red-500/20"
             >
               <PhoneOff className="w-4 h-4" />
             </button>
