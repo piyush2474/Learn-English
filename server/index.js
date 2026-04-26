@@ -134,6 +134,10 @@ io.on("connection", (socket) => {
   // --- Friend System Listeners ---
   socket.on("register_user", async (data) => {
     const { userId } = data;
+    if (!userId || userId === "null" || userId === "undefined") {
+      console.warn("Attempted to register with invalid userId:", userId);
+      return;
+    }
     socket.userId = userId;
     
     // Store live activity info
@@ -177,7 +181,7 @@ io.on("connection", (socket) => {
       socket.emit("init_data", { 
         name: freshUser.name || "Stranger",
         friends: friendsData,
-        pendingRequests: freshUser.pendingRequests,
+        pendingRequests: freshUser.pendingRequests || [],
         isVaultEnabled: freshUser.isVaultEnabled || false
       });
     }

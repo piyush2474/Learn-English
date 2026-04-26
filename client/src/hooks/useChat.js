@@ -232,10 +232,14 @@ const useChat = () => {
     });
 
     socket.on('init_data', (data) => {
-      setMyName(data.name || 'Stranger');
-      setFriends(data.friends || []);
-      setFriendRequests(data.pendingRequests || []);
-      setIsVaultEnabled(data.isVaultEnabled || false);
+      if (data.name) setMyName(data.name);
+      if (Array.isArray(data.friends)) {
+        setFriends(data.friends);
+      }
+      if (Array.isArray(data.pendingRequests)) {
+        setFriendRequests(data.pendingRequests);
+      }
+      setIsVaultEnabled(!!data.isVaultEnabled);
     });
 
     socket.on('friend_added', (data) => {
