@@ -202,6 +202,10 @@ const useChat = () => {
       }
     });
 
+    socket.on('partner_rejoined', () => {
+      setStatus('Matched');
+    });
+
     socket.on('friend_status_update', (data) => {
       setFriends(prev => prev.map(f => 
         f.userId === data.userId 
@@ -247,6 +251,7 @@ const useChat = () => {
       socket.off('user_count');
       socket.off('typing');
       socket.off('partner_disconnected');
+      socket.off('partner_rejoined');
       socket.off('messages_marked_seen');
       socket.off('friend_status_update');
       socket.off('init_data');

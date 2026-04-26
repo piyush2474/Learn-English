@@ -486,7 +486,7 @@ const Home = () => {
           showFriendAdd={partnerUserId && Array.isArray(friends) && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
           partnerStatus={
-            status === 'Matched' 
+            status === 'Matched' && partnerUserId && Array.isArray(friends)
               ? (friends.find(f => f.userId === partnerUserId)?.isOnline ? 'Online' : 'Offline') 
               : null
           }
