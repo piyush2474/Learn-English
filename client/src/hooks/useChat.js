@@ -97,7 +97,7 @@ const useChat = () => {
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        const friend = friends.find(f => f.userId === data.partnerUserId);
+        const friend = Array.isArray(friends) ? friends.find(f => f.userId === data.partnerUserId) : null;
         setPartnerName(friend ? friend.name : 'Friend');
       } else {
         setPartnerName('Stranger');
@@ -138,7 +138,7 @@ const useChat = () => {
         } catch (e) { console.error("Blob conversion failed", e); }
       }
 
-      setMessages((prev) => [...prev, { ...data, message: displayMessage, rawContent }]);
+      setMessages((prev) => [...(Array.isArray(prev) ? prev : []), { ...data, message: displayMessage, rawContent }]);
       setIsPartnerTyping(false);
       
       if (roomIdRef.current === data.roomId) {
@@ -161,6 +161,7 @@ const useChat = () => {
     socket.on('chat_history', async (history) => {
       const storedKey = localStorage.getItem(`shared_key_${roomIdRef.current}`);
       const decryptHistory = async (key) => {
+        if (!Array.isArray(history)) return [];
         return await Promise.all(history.map(async (msg) => {
           try {
             const decrypted = await decryptWithKey(msg.message, key);
@@ -178,9 +179,11 @@ const useChat = () => {
           setMessages(decrypted);
           socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: localStorage.getItem('chat_user_id') });
         } catch (e) {
-          setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
+          if (Array.isArray(history)) {
+            setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
+          }
         }
-      } else {
+      } else if (Array.isArray(history)) {
         setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
       }
     });

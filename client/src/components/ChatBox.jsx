@@ -31,7 +31,7 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
         )}
         
         <div className="flex flex-col w-full py-4 space-y-1">
-          {messages.map((msg) => (
+          {Array.isArray(messages) && messages.map((msg) => (
             <MessageBubble
               key={msg.messageId}
               message={msg.message}

@@ -68,14 +68,14 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
           </div>
         </div>
 
-        {friends.length > 0 && (
+        {Array.isArray(friends) && friends.length > 0 && (
           <div className="space-y-1">
             <div className="text-[11px] font-bold text-gray-500 px-3 py-2 uppercase tracking-widest flex justify-between items-center">
               <span>Friends</span>
               <span className="bg-white/5 px-2 py-0.5 rounded-full text-[9px]">{friends.length}</span>
             </div>
             <div className="space-y-1">
-              {friends.map((friend, i) => (
+              {Array.isArray(friends) && friends.map((friend, i) => (
                 <div 
                   key={i} 
                   onClick={() => {
