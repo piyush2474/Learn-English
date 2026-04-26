@@ -316,7 +316,12 @@ io.on("connection", (socket) => {
         broadcastStatusUpdate(partnerUserId, true, socket);
       }
 
-      socket.emit("rejoined", { roomId, partnerUserId });
+      const partner = await User.findOne({ userId: partnerUserId });
+      socket.emit("rejoined", { 
+        roomId, 
+        partnerUserId, 
+        partnerName: partner?.name || (roomId.startsWith('private_') ? 'Friend' : 'Stranger') 
+      });
       socket.to(roomId).emit("partner_rejoined");
       console.log(`User ${userId} rejoined room ${roomId}`);
 

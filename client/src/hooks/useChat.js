@@ -73,6 +73,12 @@ const useChat = () => {
       setRoomId(data.roomId);
       setPartnerUserId(data.partnerUserId);
       
+      if (data.roomId.startsWith('private_')) {
+        setPartnerName(data.partnerName || 'Friend');
+      } else {
+        setPartnerName(data.partnerName || 'Stranger');
+      }
+      
       const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
       if (savedKey) {
         try {
@@ -251,6 +257,12 @@ const useChat = () => {
       }
     });
 
+    socket.on('chat_cleared', (data) => {
+      if (data.roomId === roomIdRef.current) {
+        setMessages([]);
+      }
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -264,6 +276,7 @@ const useChat = () => {
       socket.off('partner_disconnected');
       socket.off('partner_rejoined');
       socket.off('messages_marked_seen');
+      socket.off('chat_cleared');
       socket.off('friend_status_update');
       socket.off('init_data');
       socket.off('friend_request_received');
