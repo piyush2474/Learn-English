@@ -288,7 +288,7 @@ io.on("connection", (socket) => {
   });
 
   // Handle Rejoin (Refresh Protection)
-  socket.on("rejoin_chat", (data) => {
+  socket.on("rejoin_chat", async (data) => {
     const { userId, roomId } = data;
     const room = rooms.get(roomId);
 
