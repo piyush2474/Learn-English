@@ -78,6 +78,7 @@ const Home = () => {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [showVaultGate, setShowVaultGate] = useState(null);
   const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
+  const pendingPrivateChatIdRef = useRef(null);
   const [mainView, setMainView] = useState('remote');
   const [showVcChat, setShowVcChat] = useState(true);
   const [isMirrored, setIsMirrored] = useState(true);
@@ -147,15 +148,20 @@ const Home = () => {
     };
 
     const handleVaultVerified = (data) => {
+      console.log("Vault verified response:", data);
       if (data.success) {
         setIsVaultUnlocked(true);
         setShowVaultGate(null);
-        if (pendingPrivateChatId) {
-          socket.emit("start_private_chat", { friendId: pendingPrivateChatId });
+        const nextFriendId = pendingPrivateChatIdRef.current;
+        if (nextFriendId) {
+          console.log("Starting pending private chat with:", nextFriendId);
+          socket.emit("start_private_chat", { friendId: nextFriendId });
           setMessages([]);
+          pendingPrivateChatIdRef.current = null;
           setPendingPrivateChatId(null);
         }
       } else {
+        console.warn("Vault verification failed");
         window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
       }
     };
@@ -182,7 +188,7 @@ const Home = () => {
       socket.off('vault_verified', handleVaultVerified);
       socket.off('password_set', handlePasswordSet);
     };
-  }, [pendingPrivateChatId]);
+  }, []);
 
   // Sync name input when settings opens
   useEffect(() => {
@@ -342,12 +348,20 @@ const Home = () => {
     endCall();
     setIsVaultUnlocked(false);
     if (isVaultEnabled) {
+      pendingPrivateChatIdRef.current = friendId;
       setPendingPrivateChatId(friendId);
       setShowVaultGate('verify');
     } else {
       socket.emit("start_private_chat", { friendId });
       setMessages([]);
     }
+  };
+
+  const handleSendFriendRequest = () => {
+    if (!roomId) return;
+    console.log("Sending friend request for room:", roomId);
+    socket.emit('send_friend_request', { roomId });
+    alert("Friend request sent!");
   };
 
   const deleteMessage = (messageId) => {
@@ -468,7 +482,7 @@ const Home = () => {
           onOpenSidebar={() => setIsSidebarOpen(true)}
           onStartCall={startCall}
           onEndSession={handleLeaveChat}
-          onSendFriendRequest={() => socket.emit('send_friend_request', { roomId })}
+          onSendFriendRequest={handleSendFriendRequest}
           showFriendAdd={partnerUserId && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
         />

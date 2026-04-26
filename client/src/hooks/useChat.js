@@ -217,6 +217,10 @@ const useChat = () => {
       setIsVaultEnabled(data.isVaultEnabled || false);
     });
 
+    socket.on('friend_request_received', (data) => {
+      setFriendRequests(prev => [...prev, data]);
+    });
+
     socket.on('messages_marked_seen', (data) => {
       if (data.roomId === roomIdRef.current) {
         setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
@@ -237,6 +241,7 @@ const useChat = () => {
       socket.off('messages_marked_seen');
       socket.off('friend_status_update');
       socket.off('init_data');
+      socket.off('friend_request_received');
     };
   };
 
