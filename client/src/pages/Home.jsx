@@ -35,6 +35,7 @@ const Home = () => {
     friends,
     friendRequests, setFriendRequests,
     myUserId, setMyUserId,
+    myName, setMyName,
     sharedKey,
     isPartnerTyping,
     isSettingsOpen, setIsSettingsOpen,
