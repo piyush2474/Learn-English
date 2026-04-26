@@ -138,7 +138,15 @@ const Home = () => {
       }
     };
 
+    const handleVaultStatus = (data) => {
+      useStore.getState().setIsVaultEnabled(data.isVaultEnabled);
+      if (data.isVaultEnabled) {
+        setIsVaultUnlocked(false);
+      }
+    };
+
     socket.on('inform_sent', handleInformSent);
+    socket.on('vault_status_updated', handleVaultStatus);
 
     const handleVisibilityChange = () => {
       if (document.hidden) setIsVaultUnlocked(false);
@@ -147,8 +155,24 @@ const Home = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off('inform_sent', handleInformSent);
+      socket.off('vault_status_updated', handleVaultStatus);
     };
   }, []);
+
+  // Sync name input when settings opens
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setNameInput(myName);
+    }
+  }, [isSettingsOpen, myName]);
+
+  const handleToggleVault = () => {
+    if (isVaultEnabled) {
+      socket.emit('toggle_vault', { enabled: false });
+    } else {
+      setShowVaultGate('setup');
+    }
+  };
 
   const fetchStealthWord = async () => {
     setIsFetchingWord(true);
@@ -475,14 +499,66 @@ const Home = () => {
         />
 
         {isSettingsOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="bg-[#2f2f2f] w-full max-w-sm rounded-3xl border border-[#3d3d3d] p-8 shadow-2xl">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-white">Settings</h2>
-                <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-white"><CloseIcon className="w-6 h-6" /></button>
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-[#1a1c2e] w-full max-w-sm rounded-[32px] border border-white/10 p-8 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
+              
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Settings</h2>
+                  <p className="text-gray-500 text-[11px] font-bold uppercase tracking-widest mt-1">Personalize your experience</p>
+                </div>
+                <button 
+                  onClick={() => setIsSettingsOpen(false)} 
+                  className="p-2 hover:bg-white/5 rounded-full text-gray-500 hover:text-white transition-colors"
+                >
+                  <CloseIcon className="w-6 h-6" />
+                </button>
               </div>
-              <input type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)} className="w-full bg-[#171717] border border-[#3d3d3d] rounded-xl px-4 py-3 text-white mb-4" placeholder="Enter name..." />
-              <button onClick={() => { socket.emit('update_profile', { name: nameInput }); setIsSettingsOpen(false); }} className="w-full bg-blue-600 text-white py-3 rounded-xl">Save</button>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2 block ml-1">Display Name</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={nameInput} 
+                      onChange={(e) => setNameInput(e.target.value)} 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-blue-500/50 transition-all font-medium" 
+                      placeholder="How should we call you?..." 
+                    />
+                    <Shield className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                  </div>
+                </div>
+
+                <div className="p-5 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:bg-white/[0.08] transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isVaultEnabled ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/10 text-gray-500'}`}>
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-200">Private Vault</p>
+                      <p className="text-[10px] text-gray-500 font-medium">{isVaultEnabled ? 'Secure 4-digit protection' : 'Add extra layer of security'}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleToggleVault}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 ${isVaultEnabled ? 'bg-blue-600' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 ${isVaultEnabled ? 'left-7 shadow-lg' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => { 
+                    socket.emit('update_profile', { name: nameInput }); 
+                    setIsSettingsOpen(false); 
+                  }} 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20 active:scale-95 mt-4"
+                >
+                  Save Changes
+                </button>
+              </div>
             </div>
           </div>
         )}
