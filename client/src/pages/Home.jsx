@@ -508,7 +508,7 @@ const Home = () => {
                       {friendRequests[0].fromName?.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm text-white font-bold">{friendRequests[0].fromName}</p>
+                      <p className="text-sm text-white font-bold">{friendRequests[0]?.fromName || 'Stranger'}</p>
                       <p className="text-[10px] text-gray-500 font-medium">Sent you a friend request</p>
                     </div>
                   </div>

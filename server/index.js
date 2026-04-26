@@ -229,7 +229,10 @@ io.on("connection", (socket) => {
     socket.emit("friend_added", { 
       userId: fromUserId, 
       name: other.name || "Stranger", 
-      isOnline: isOtherOnline 
+      isOnline: isOtherOnline,
+      activity: isOtherOnline ? (onlineUsers.get(fromUserId)?.status || 'available') : 'offline',
+      lastActive: other.lastActive,
+      avatarColor: other.avatarColor
     });
     
     const otherUserEntry = onlineUsers.get(fromUserId);
@@ -237,7 +240,10 @@ io.on("connection", (socket) => {
       io.to(otherUserEntry.socketId).emit("friend_added", { 
         userId: socket.userId, 
         name: me.name || "Stranger", 
-        isOnline: true 
+        isOnline: true,
+        activity: onlineUsers.get(socket.userId)?.status || 'available',
+        lastActive: me.lastActive,
+        avatarColor: me.avatarColor
       });
     }
   });
