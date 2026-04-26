@@ -183,13 +183,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
             <span className="text-[13px] text-gray-400 group-hover:text-gray-200">Profile Settings</span>
           </div>
 
-          <div 
-            onClick={() => { onInform(); onClose(); }}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <Info className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
-            <span className="text-[13px] text-gray-400 group-hover:text-gray-200">Inform</span>
-          </div>
+
 
           <div 
             onClick={() => { onEndSession(); onClose(); }}
