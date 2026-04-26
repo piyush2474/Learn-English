@@ -485,6 +485,11 @@ const Home = () => {
           onSendFriendRequest={handleSendFriendRequest}
           showFriendAdd={partnerUserId && Array.isArray(friends) && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
+          partnerStatus={
+            status === 'Matched' 
+              ? (friends.find(f => f.userId === partnerUserId)?.isOnline ? 'Online' : 'Offline') 
+              : null
+          }
         />
 
         <main className="flex-1 overflow-hidden relative flex flex-col">
@@ -497,11 +502,32 @@ const Home = () => {
           ) : (
             <>
               {friendRequests.length > 0 && (
-                <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl">
-                  <p className="text-sm text-white font-medium">{friendRequests[0].fromName} wants to be friends!</p>
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={() => socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from })} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Accept</button>
-                    <button onClick={() => setFriendRequests(prev => prev.slice(1))} className="bg-gray-600 text-white px-3 py-1 rounded text-xs">Decline</button>
+                <div className="absolute top-4 right-4 z-50 bg-[#1a1c2e] border border-white/10 p-5 rounded-2xl shadow-2xl animate-in slide-in-from-right duration-500 w-80">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                      {friendRequests[0].fromName?.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm text-white font-bold">{friendRequests[0].fromName}</p>
+                      <p className="text-[10px] text-gray-500 font-medium">Sent you a friend request</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from });
+                        setFriendRequests(prev => prev.slice(1));
+                      }} 
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+                    >
+                      Accept
+                    </button>
+                    <button 
+                      onClick={() => setFriendRequests(prev => prev.slice(1))} 
+                      className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+                    >
+                      Decline
+                    </button>
                   </div>
                 </div>
               )}

@@ -9,7 +9,8 @@ const ChatHeader = ({
   onEndSession,
   onSendFriendRequest,
   showFriendAdd,
-  partnerUserId
+  partnerUserId,
+  partnerStatus
 }) => {
   return (
     <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0a0b14]/80 backdrop-blur-md z-40">
@@ -30,11 +31,11 @@ const ChatHeader = ({
               <h2 className="text-[15px] font-bold text-white tracking-tight leading-none">
                 {status === 'Matched' ? partnerName : 'Aura'}
               </h2>
-              <div className={`w-2 h-2 rounded-full ${status === 'Matched' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${partnerStatus === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-500'}`} />
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                {status === 'Matched' ? 'Active Chat' : 'Secured Gateway'}
+                {status === 'Matched' ? (partnerStatus || 'Active Chat') : 'Secured Gateway'}
               </span>
             </div>
           </div>

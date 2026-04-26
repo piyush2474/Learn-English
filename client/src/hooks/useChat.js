@@ -217,6 +217,15 @@ const useChat = () => {
       setIsVaultEnabled(data.isVaultEnabled || false);
     });
 
+    socket.on('friend_added', (data) => {
+      setFriends(prev => [...prev, data]);
+      setFriendRequests(prev => prev.filter(req => req.from !== data.userId));
+    });
+
+    socket.on('friend_removed', (data) => {
+      setFriends(prev => prev.filter(f => f.userId !== data.userId));
+    });
+
     socket.on('friend_request_received', (data) => {
       setFriendRequests(prev => [...prev, data]);
     });
@@ -242,6 +251,8 @@ const useChat = () => {
       socket.off('friend_status_update');
       socket.off('init_data');
       socket.off('friend_request_received');
+      socket.off('friend_added');
+      socket.off('friend_removed');
     };
   };
 
