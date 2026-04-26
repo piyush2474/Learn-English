@@ -428,7 +428,13 @@ io.on("connection", (socket) => {
       }
     }
 
-    socket.emit("matched", { roomId, isPrivate: true, partnerUserId: friendId });
+    const partner = await User.findOne({ userId: friendId });
+    socket.emit("matched", { 
+      roomId, 
+      isPrivate: true, 
+      partnerUserId: friendId,
+      partnerName: partner?.name || "Friend"
+    });
 
     Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
       socket.emit("chat_history", history);

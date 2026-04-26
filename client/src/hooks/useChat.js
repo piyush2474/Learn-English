@@ -97,8 +97,16 @@ const useChat = () => {
       sessionStorage.setItem('current_room_id', data.roomId);
       
       if (data.isPrivate) {
-        const friend = Array.isArray(friends) ? friends.find(f => f.userId === data.partnerUserId) : null;
-        setPartnerName(friend ? friend.name : 'Friend');
+        setPartnerName(data.partnerName || 'Friend');
+        
+        // Try to load cached key for offline messaging
+        const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
+        if (savedKey) {
+          try {
+            const key = await importSharedKey(savedKey);
+            setSharedKey(key);
+          } catch (e) { console.error("Failed to load cached key", e); }
+        }
       } else {
         setPartnerName('Stranger');
       }
