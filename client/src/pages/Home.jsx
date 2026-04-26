@@ -483,7 +483,7 @@ const Home = () => {
           onStartCall={startCall}
           onEndSession={handleLeaveChat}
           onSendFriendRequest={handleSendFriendRequest}
-          showFriendAdd={partnerUserId && !friends.some(f => f.userId === partnerUserId)}
+          showFriendAdd={partnerUserId && Array.isArray(friends) && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
         />
 

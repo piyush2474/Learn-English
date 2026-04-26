@@ -130,9 +130,11 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onRemoveFriend(friend.userId);
+                      if (window.confirm("Are you sure you want to remove this friend?")) {
+                        onRemoveFriend(friend.userId);
+                      }
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-lg transition-all"
+                    className="flex-shrink-0 p-2 bg-red-500/5 hover:bg-red-500/10 text-gray-600 hover:text-red-500 rounded-xl transition-all ml-2"
                     title="Remove Friend"
                   >
                     <Trash2 className="w-4 h-4" />
