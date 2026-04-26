@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Shield, GripVertical, Volume2, Volume1, PhoneOff, Mic, X as CloseIcon, Download } from 'lucide-react';
+import { RefreshCw, Shield, GripVertical, Volume2, Volume1, PhoneOff, Mic, X as CloseIcon, Download, Info } from 'lucide-react';
 import { socket } from '../socket/socket';
 import useStore from '../store/useStore';
 import useChat from '../hooks/useChat';
@@ -14,6 +14,7 @@ import MatchmakingView from '../components/chat/MatchmakingView';
 import CallOverlay from '../components/chat/CallOverlay';
 import IncomingCallModal from '../components/chat/IncomingCallModal';
 import DraggableStatusBar from '../components/chat/DraggableStatusBar';
+import LMSDashboard from '../components/stealth/LMSDashboard';
 
 import { 
   generateKeyPair, 
@@ -40,6 +41,7 @@ const Home = () => {
     isVaultEnabled,
     isVaultUnlocked, setIsVaultUnlocked,
     isStealthMode,
+    stealthWord, setStealthWord,
     partnerMediaStatus,
     partnerUserId,
     unreadCounts, setUnreadCounts,
@@ -63,6 +65,7 @@ const Home = () => {
     endCall,
     toggleMic,
     toggleCamera,
+    switchCamera,
     localStream
   } = useWebRTC(roomId);
 
@@ -78,6 +81,11 @@ const Home = () => {
   const [showVcChat, setShowVcChat] = useState(true);
   const [isMirrored, setIsMirrored] = useState(true);
   const [facingMode, setFacingMode] = useState('user');
+
+  const [isInformModalOpen, setIsInformModalOpen] = useState(false);
+  const [informMessage, setInformMessage] = useState('');
+  const [isSendingInform, setIsSendingInform] = useState(false);
+  const [isFetchingWord, setIsFetchingWord] = useState(false);
 
   const pullStartY = useRef(0);
   const dragStartY = useRef(0);
@@ -117,12 +125,56 @@ const Home = () => {
     };
     initKeys();
 
+    if (isStealthMode) fetchStealthWord();
+
+    const handleInformSent = (data) => {
+      setIsSendingInform(false);
+      if (data.success) {
+        alert("Information sent successfully!");
+        setIsInformModalOpen(false);
+        setInformMessage('');
+      } else {
+        alert("Error: " + data.error);
+      }
+    };
+
+    socket.on('inform_sent', handleInformSent);
+
     const handleVisibilityChange = () => {
       if (document.hidden) setIsVaultUnlocked(false);
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      socket.off('inform_sent', handleInformSent);
+    };
   }, []);
+
+  const fetchStealthWord = async () => {
+    setIsFetchingWord(true);
+    try {
+      const words = ['ubiquitous', 'ephemeral', 'mitigate', 'tenacious', 'resilient', 'paradigm', 'clandestine', 'scrutinize', 'advocate', 'integrity'];
+      const randomWord = words[Math.floor(Math.random() * words.length)];
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${randomWord}`);
+      const data = await res.json();
+      if (data && data[0]) {
+        setStealthWord(data[0]);
+      }
+    } catch (e) {
+      console.error("Failed to fetch word", e);
+    } finally {
+      setIsFetchingWord(false);
+    }
+  };
+
+  const handleSendInform = () => {
+    if (!informMessage.trim()) return;
+    setIsSendingInform(true);
+    socket.emit('inform_owner', { 
+      message: informMessage, 
+      senderName: localStorage.getItem('chat_user_name') || 'Stranger' 
+    });
+  };
 
   // --- WebRTC Stream Attachment ---
   useEffect(() => {
@@ -192,6 +244,7 @@ const Home = () => {
     const originalTitle = "Aura";
     if (isStealthMode) {
       document.title = "System Task Manager";
+      fetchStealthWord();
     } else {
       document.title = originalTitle;
     }
@@ -346,7 +399,7 @@ const Home = () => {
         friends={friends}
         onSelectFriend={startPrivateChat}
         onRemoveFriend={(id) => socket.emit('remove_friend', { friendId: id })}
-        onInform={() => {}} 
+        onInform={() => setIsInformModalOpen(true)} 
         onOpenSettings={() => setIsSettingsOpen(true)}
         currentRoomId={roomId}
         unreadCounts={unreadCounts}
@@ -372,32 +425,42 @@ const Home = () => {
         />
 
         <main className="flex-1 overflow-hidden relative flex flex-col">
-          {friendRequests.length > 0 && (
-            <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl">
-              <p className="text-sm text-white font-medium">{friendRequests[0].fromName} wants to be friends!</p>
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from })} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Accept</button>
-                <button onClick={() => setFriendRequests(prev => prev.slice(1))} className="bg-gray-600 text-white px-3 py-1 rounded text-xs">Decline</button>
-              </div>
-            </div>
-          )}
-
-          <MatchmakingView 
-            status={status}
-            onStartSession={findPartner}
-            onCancelSearch={handleLeaveChat}
-          />
-
-          {(status === 'Matched' || status === 'Disconnected' || roomId?.startsWith('private_')) && (
-            <ChatBox 
-              messages={messages} 
-              isPartnerTyping={isPartnerTyping} 
-              socketId={myUserId} 
-              status={status}
-              onDeleteMessage={deleteMessage}
-              partnerName={partnerName}
-              onZoomImage={setZoomedImage}
+          {isStealthMode ? (
+            <LMSDashboard 
+              isFetchingWord={isFetchingWord}
+              stealthWord={stealthWord}
+              fetchNewWord={fetchStealthWord}
             />
+          ) : (
+            <>
+              {friendRequests.length > 0 && (
+                <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl">
+                  <p className="text-sm text-white font-medium">{friendRequests[0].fromName} wants to be friends!</p>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from })} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Accept</button>
+                    <button onClick={() => setFriendRequests(prev => prev.slice(1))} className="bg-gray-600 text-white px-3 py-1 rounded text-xs">Decline</button>
+                  </div>
+                </div>
+              )}
+
+              <MatchmakingView 
+                status={status}
+                onStartSession={findPartner}
+                onCancelSearch={handleLeaveChat}
+              />
+
+              {(status === 'Matched' || status === 'Disconnected' || roomId?.startsWith('private_')) && (
+                <ChatBox 
+                  messages={messages} 
+                  isPartnerTyping={isPartnerTyping} 
+                  socketId={myUserId} 
+                  status={status}
+                  onDeleteMessage={deleteMessage}
+                  partnerName={partnerName}
+                  onZoomImage={setZoomedImage}
+                />
+              )}
+            </>
           )}
         </main>
 
@@ -438,6 +501,33 @@ const Home = () => {
           onUnlock={(pin) => socket.emit('verify_vault_password', { password: pin })}
           onSetPassword={(pin) => socket.emit('set_vault_password', { password: pin })}
         />
+      )}
+
+      {isInformModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#1a1c2e] w-full max-w-md rounded-3xl border border-white/10 p-8 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Info className="w-5 h-5 text-yellow-500" /> Inform Owner
+              </h2>
+              <button onClick={() => setIsInformModalOpen(false)} className="text-gray-500 hover:text-white"><CloseIcon className="w-6 h-6" /></button>
+            </div>
+            <p className="text-gray-400 text-sm mb-4">Send a direct message or feedback to the platform owner. Your identity remains protected.</p>
+            <textarea 
+              value={informMessage}
+              onChange={(e) => setInformMessage(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-4 text-white mb-6 min-h-[150px] focus:outline-none focus:border-blue-500/50"
+              placeholder="What would you like to say?..."
+            />
+            <button 
+              onClick={handleSendInform}
+              disabled={isSendingInform || !informMessage.trim()}
+              className={`w-full py-4 rounded-2xl font-bold transition-all ${isSendingInform ? 'bg-blue-600/50 text-white' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-xl shadow-blue-600/20'}`}
+            >
+              {isSendingInform ? 'Sending Message...' : 'Send Message'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -67,24 +67,26 @@ const useWebRTC = (roomId) => {
   const switchCamera = async (facingMode) => {
     if (!localStream) return;
     try {
-      const oldTrack = localStream.getVideoTracks()[0];
-      if (oldTrack) oldTrack.stop();
+      const oldVideoTrack = localStream.getVideoTracks()[0];
+      const audioTrack = localStream.getAudioTracks()[0];
+      
+      if (oldVideoTrack) oldVideoTrack.stop();
       
       const newStream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode } 
       });
-      const newTrack = newStream.getVideoTracks()[0];
+      const newVideoTrack = newStream.getVideoTracks()[0];
       
-      const updatedStream = new MediaStream(localStream.getTracks());
-      const oldVideoTrack = updatedStream.getVideoTracks()[0];
-      if (oldVideoTrack) updatedStream.removeTrack(oldVideoTrack);
-      updatedStream.addTrack(newTrack);
+      const combinedStream = new MediaStream([newVideoTrack]);
+      if (audioTrack) combinedStream.addTrack(audioTrack);
       
-      setLocalStream(updatedStream);
+      setLocalStream(combinedStream);
       
       if (peerConnection.current) {
         const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(newTrack);
+        if (sender) {
+          await sender.replaceTrack(newVideoTrack);
+        }
       }
       return true;
     } catch (e) {

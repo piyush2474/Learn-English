@@ -176,6 +176,14 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
 
         <div className="flex flex-col gap-1">
           <div 
+            onClick={() => { onInform(); onClose(); }}
+            className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
+          >
+            <Info className="w-4 h-4 text-gray-500 group-hover:text-yellow-400" />
+            <span className="text-[13px] text-gray-400 group-hover:text-gray-200">Inform Owner</span>
+          </div>
+
+          <div 
             onClick={() => { onOpenSettings(); onClose(); }}
             className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
           >
