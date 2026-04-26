@@ -1,243 +1,95 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowUp, Plus, LayoutGrid, Menu, Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, Video, VideoOff, Camera, RefreshCw, UserPlus, Check, X as CloseIcon, Users, Settings, Globe, Trash2, Download, LogOut, MessageCircle, Maximize2, Shield, GripVertical } from 'lucide-react';
+import { RefreshCw, Shield, GripVertical, Volume2, Volume1, PhoneOff, Mic, X as CloseIcon, Download } from 'lucide-react';
 import { socket } from '../socket/socket';
+import useStore from '../store/useStore';
+import useChat from '../hooks/useChat';
+import useWebRTC from '../hooks/useWebRTC';
+
 import Sidebar from '../components/Sidebar';
 import ChatBox from '../components/ChatBox';
 import VaultGate from '../components/VaultGate';
+import ChatHeader from '../components/chat/ChatHeader';
+import ChatInput from '../components/chat/ChatInput';
+import MatchmakingView from '../components/chat/MatchmakingView';
+import CallOverlay from '../components/chat/CallOverlay';
+import IncomingCallModal from '../components/chat/IncomingCallModal';
+import DraggableStatusBar from '../components/chat/DraggableStatusBar';
+
 import { 
-  encryptWithKey, 
-  decryptWithKey, 
   generateKeyPair, 
-  exportPublicKey, 
-  importPublicKey, 
-  deriveSharedSecret,
   exportKeyPair,
   importKeyPair,
-  exportSharedKey,
-  importSharedKey
 } from '../utils/crypto';
 
 const Home = () => {
-  const [status, setStatus] = useState('Idle');
-  const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
-  const [partnerName, setPartnerName] = useState('Stranger');
-  const [messages, setMessages] = useState([]);
+  // --- Zustand Store ---
+  const {
+    status,
+    isSocketConnected,
+    partnerName,
+    messages, setMessages,
+    roomId,
+    userCount,
+    isSidebarOpen, setIsSidebarOpen,
+    friends,
+    friendRequests, setFriendRequests,
+    myUserId, setMyUserId,
+    sharedKey,
+    isPartnerTyping,
+    isSettingsOpen, setIsSettingsOpen,
+    isVaultEnabled,
+    isVaultUnlocked, setIsVaultUnlocked,
+    isStealthMode,
+    partnerMediaStatus,
+    partnerUserId,
+    unreadCounts, setUnreadCounts,
+  } = useStore();
+
+  // --- Custom Hooks ---
+  const { initSocket, findPartner, sendMessage, leaveChat } = useChat();
+  const {
+    isCalling,
+    isReceivingCall,
+    callAccepted,
+    isVideoCall,
+    isMicMuted,
+    isCameraOff,
+    isSpeakerMode,
+    setIsSpeakerMode,
+    remoteStream,
+    isSpeaking,
+    startCall,
+    answerCall,
+    endCall,
+    toggleMic,
+    toggleCamera,
+    localStream
+  } = useWebRTC(roomId);
+
+  // --- Local Refs & UI State ---
   const [inputText, setInputText] = useState('');
-  const [roomId, setRoomId] = useState(null);
-  const [userCount, setUserCount] = useState(0);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [friends, setFriends] = useState([]);
-  const [friendRequests, setFriendRequests] = useState([]);
-  const [myUserId, setMyUserId] = useState(null);
-  const [myName, setMyName] = useState('Stranger');
-  const [remoteStream, setRemoteStream] = useState(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
-  const [myKeyPair, setMyKeyPair] = useState(null);
-  const [sharedKey, setSharedKey] = useState(null);
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  const typingTimeoutRef = useRef(null);
-  const sharedKeyRef = useRef(null);
-  const myKeyPairRef = useRef(null);
-  const roomIdRef = useRef(null);
-
-  // Sync refs with state
-  useEffect(() => {
-    sharedKeyRef.current = sharedKey;
-    myKeyPairRef.current = myKeyPair;
-    roomIdRef.current = roomId;
-  }, [sharedKey, myKeyPair, roomId]);
-
-  // --- Pull to Refresh ---
   const [pullOffset, setPullOffset] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const pullStartY = useRef(0);
-
-  const handleTouchStartRefresh = (e) => {
-    // Only allow if we are at the top and not in a scrollable area that's already scrolled
-    pullStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchMoveRefresh = (e) => {
-    if (pullStartY.current === 0) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - pullStartY.current;
-    
-    // Only pull down if at the very top
-    if (diff > 0 && window.scrollY === 0) {
-      setIsPulling(true);
-      // Logarithmic pull for premium feel
-      const newOffset = Math.min(diff * 0.5, 120);
-      setPullOffset(newOffset);
-      
-      // Prevent default browser behavior if we're pulling
-      if (newOffset > 10 && e.cancelable) {
-        e.preventDefault();
-      }
-    }
-  };
-
-  const handleTouchEndRefresh = () => {
-    if (pullOffset > 90) {
-      // Trigger refresh
-      setPullOffset(100);
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } else {
-      setIsPulling(false);
-      setPullOffset(0);
-    }
-    pullStartY.current = 0;
-  };
-
-  // --- Draggable Status Bar ---
   const [statusBarY, setStatusBarY] = useState(24);
-  const [isDragging, setIsDragging] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null);
+  const [showVaultGate, setShowVaultGate] = useState(null);
+  const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
+  const [mainView, setMainView] = useState('remote');
+  const [showVcChat, setShowVcChat] = useState(true);
+  const [isMirrored, setIsMirrored] = useState(true);
+  const [facingMode, setFacingMode] = useState('user');
+
+  const pullStartY = useRef(0);
   const dragStartY = useRef(0);
   const dragStartStatusBarY = useRef(0);
-
-  const handleDragStart = (e) => {
-    setIsDragging(true);
-    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-    dragStartY.current = clientY;
-    dragStartStatusBarY.current = statusBarY;
-  };
-
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (!isDragging) return;
-      const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-      const deltaY = clientY - dragStartY.current;
-      const newY = Math.max(10, Math.min(window.innerHeight - 100, dragStartStatusBarY.current + deltaY));
-      setStatusBarY(newY);
-    };
-
-    const handleEnd = () => setIsDragging(false);
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', handleMove);
-      window.addEventListener('touchend', handleEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleEnd);
-    };
-  }, [isDragging, statusBarY]);
-
-  // --- Calling States ---
-  const [isCalling, setIsCalling] = useState(false);
-  const [isReceivingCall, setIsReceivingCall] = useState(false);
-  const [callAccepted, setCallAccepted] = useState(false);
-  const [isVideoCall, setIsVideoCall] = useState(false); 
-  const [isMicMuted, setIsMicMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isSpeakerMode, setIsSpeakerMode] = useState(false); // Default: Ear Mode (false)
-  const [incomingSignal, setIncomingSignal] = useState(null);
-  const [callType, setCallType] = useState('audio'); // 'audio' or 'video'
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isInformModalOpen, setIsInformModalOpen] = useState(false);
-  const [informMessage, setInformMessage] = useState('');
-  const [isSendingInform, setIsSendingInform] = useState(false);
-  const [zoomedImage, setZoomedImage] = useState(null);
-  const [partnerMediaStatus, setPartnerMediaStatus] = useState(null); // 'image' | 'video' | null
-  const [partnerUserId, setPartnerUserId] = useState(null);
-  const [isStealthMode, setIsStealthMode] = useState(false);
-  const [stealthWord, setStealthWord] = useState(null);
-  const [isFetchingWord, setIsFetchingWord] = useState(false);
-  const [isMirrored, setIsMirrored] = useState(true);
-  const [isVaultEnabled, setIsVaultEnabled] = useState(false);
-  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
-  const [showVaultGate, setShowVaultGate] = useState(null); // 'verify' | 'setup' | null
-  const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
-  const [isPipMode, setIsPipMode] = useState(true);
-  const [mainView, setMainView] = useState('remote'); // 'remote' or 'local'
-  const [showVcChat, setShowVcChat] = useState(true);
-  const [facingMode, setFacingMode] = useState('user'); // 'user' or 'environment'
-  const [unreadCounts, setUnreadCounts] = useState({});
-  
-  const peerConnection = useRef(null);
-  const localStream = useRef(null);
+  const isDragging = useRef(false);
   const remoteAudioRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const localVideoRef = useRef(null);
   const vcChatRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
-  // --- Stealth Mode Metadata & Call Suppression ---
-  useEffect(() => {
-    const originalTitle = "Aura";
-    
-    if (isStealthMode) {
-      document.title = "System Task Manager";
-      // Mute and silence if in a call
-      if (isCalling || callAccepted) {
-        setIsMicMuted(true);
-        if (remoteAudioRef.current) remoteAudioRef.current.muted = true;
-      }
-    } else {
-      document.title = originalTitle;
-      if (remoteAudioRef.current) remoteAudioRef.current.muted = false;
-    }
-
-    return () => { document.title = originalTitle; };
-  }, [isStealthMode]);
-
-  const fetchNewWord = async () => {
-    const commonSophisticatedWords = ['Ubiquitous', 'Ephemeral', 'Pragmatic', 'Resilient', 'Eloquence', 'Alacrity', 'Paradigm', 'Luminous', 'Pensive', 'Quintessential'];
-    const randomWord = commonSophisticatedWords[Math.floor(Math.random() * commonSophisticatedWords.length)];
-    
-    setIsFetchingWord(true);
-    try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${randomWord}`);
-      const data = await response.json();
-      if (data && data[0]) {
-        setStealthWord(data[0]);
-      }
-    } catch (err) {
-      console.error("Stealth fetch failed:", err);
-    } finally {
-      setIsFetchingWord(false);
-    }
-  };
-
-  // Auto-scroll VC chat
-  useEffect(() => {
-    if (vcChatRef.current) {
-      vcChatRef.current.scrollTop = vcChatRef.current.scrollHeight;
-    }
-  }, [messages, isVideoCall]);
-
-  // Handle Remote Stream Attachment
-  useEffect(() => {
-    if (remoteStream) {
-      if (isVideoCall && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.play().catch(e => {
-          if (e.name !== 'AbortError') console.error("WebRTC: Video play failed", e);
-        });
-      }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
-        remoteAudioRef.current.play().catch(e => {
-          if (e.name !== 'AbortError') console.error("WebRTC: Audio play failed", e);
-        });
-      }
-    }
-  }, [remoteStream, isVideoCall, isSpeakerMode]);
-  const iceCandidatesQueue = useRef([]);
-  const audioContext = useRef(null);
-  const analyser = useRef(null);
-  const animationFrame = useRef(null);
-  const fileInputRef = useRef(null);
-  // ----------------------
-
-  // Persistent User ID and Key Pair
+  // --- Initialization ---
   useEffect(() => {
     let id = localStorage.getItem('chat_user_id');
     if (!id) {
@@ -248,895 +100,145 @@ const Home = () => {
 
     const initKeys = async () => {
       const savedKeys = localStorage.getItem('chat_key_pair');
+      let keyPair;
       if (savedKeys) {
         try {
-          const keys = await importKeyPair(savedKeys);
-          setMyKeyPair(keys);
-          return;
+          keyPair = await importKeyPair(savedKeys);
         } catch (e) { console.error("Failed to import keys", e); }
       }
       
-      const keys = await generateKeyPair();
-      const exported = await exportKeyPair(keys);
-      localStorage.setItem('chat_key_pair', exported);
-      setMyKeyPair(keys);
+      if (!keyPair) {
+        keyPair = await generateKeyPair();
+        const exported = await exportKeyPair(keyPair);
+        localStorage.setItem('chat_key_pair', exported);
+      }
+      
+      initSocket(keyPair);
     };
     initKeys();
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) setIsVaultUnlocked(false);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-
-
-  // Update volume when speaker mode changes
+  // --- WebRTC Stream Attachment ---
   useEffect(() => {
-    if (remoteAudioRef.current) {
+    if (remoteStream && remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.volume = isSpeakerMode ? 1.0 : 0.4;
     }
-  }, [isSpeakerMode]);
-
-  // Decryption Watcher: When sharedKey arrives, decrypt any "locked" messages
-  useEffect(() => {
-    if (sharedKey && messages.length > 0) {
-      const needsDecryption = messages.some(m => m.message === "[Encrypted Message]" && m.rawContent);
-      if (needsDecryption) {
-        const decryptMissing = async () => {
-          const updated = await Promise.all(messages.map(async (msg) => {
-            if (msg.message === "[Encrypted Message]" && msg.rawContent) {
-              try {
-                const decrypted = await decryptWithKey(msg.rawContent, sharedKey);
-                return { ...msg, message: decrypted };
-              } catch (e) {
-                return msg;
-              }
-            }
-            return msg;
-          }));
-          setMessages(updated);
-        };
-        decryptMissing();
-      }
+    if (remoteStream && isVideoCall && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
     }
-  }, [sharedKey, messages]);
-
-  // Robust list of free STUN servers
-  const iceServers = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:stun.stunprotocol.org' },
-    { urls: 'stun:stun.sipgate.net:10000' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    // TURN servers are necessary for connecting between different networks (Mobile to WiFi)
-    // You can get free TURN credentials from services like Metered.ca or Twilio
-    /* 
-    {
-      urls: 'turn:your-turn-server.com:3478',
-      username: 'your-username',
-      credential: 'your-password'
-    }
-    */
-  ];
+  }, [remoteStream, isVideoCall, isSpeakerMode]);
 
   useEffect(() => {
-    if (!socket.connected) {
-      socket.connect();
+    if (localStream && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
     }
-
-    socket.on('connect', () => {
-      setIsSocketConnected(true);
-      // Always register user on connect/reconnect
-      const id = localStorage.getItem('chat_user_id');
-      if (id) {
-        socket.emit("register_user", { userId: id });
-      }
-
-      const savedRoomId = sessionStorage.getItem('current_room_id');
-      if (savedRoomId) {
-        socket.emit('rejoin_chat', { userId: id, roomId: savedRoomId });
-      } else {
-        setStatus('Idle');
-      }
-    });
-
-    socket.on('disconnect', () => {
-      setIsSocketConnected(false);
-    });
-
-    socket.on('rejoined', async (data) => {
-      setStatus('Matched');
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setPartnerUserId(data.partnerUserId);
-      
-      const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
-      if (savedKey) {
-        try {
-          const key = await importSharedKey(savedKey);
-          setSharedKey(key);
-          sharedKeyRef.current = key;
-        } catch (e) { console.error("Failed to restore shared key", e); }
-      }
-      
-      // Mark seen
-      const currentId = localStorage.getItem('chat_user_id');
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: currentId });
-
-      // Trigger key exchange in case the other person doesn't have our key
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('partner_rejoined', async () => {
-      // Restore state when partner returns
-      setStatus('Matched');
-      const savedRoomId = sessionStorage.getItem('current_room_id');
-      if (savedRoomId) {
-        setRoomId(savedRoomId);
-        roomIdRef.current = savedRoomId;
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        { message: 'Partner is back!', senderId: 'system', timestamp: new Date().toISOString() }
-      ]);
-      
-      // Re-send our public key in case the partner lost theirs
-      if (myKeyPairRef.current && sessionStorage.getItem('current_room_id')) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: sessionStorage.getItem('current_room_id'), publicKey: pubKeyBase64 });
-      }
-    });
-
-    socket.on('rejoin_failed', () => {
-      sessionStorage.removeItem('current_room_id');
-      setStatus('Idle');
-    });
-
-    socket.on('user_count', (count) => {
-      setUserCount(count);
-    });
-
-    socket.on('waiting', () => {
-      setStatus('Waiting');
-      setMessages([]);
-      setRoomId(null);
-      sessionStorage.removeItem('current_room_id');
-    });
-
-    // Cleaned up core socket listeners
-    socket.on('matched', async (data) => {
-      setRoomId(data.roomId);
-      roomIdRef.current = data.roomId;
-      setStatus('Matched');
-      setMessages([]);
-      setPartnerUserId(data.partnerUserId);
-      sessionStorage.setItem('current_room_id', data.roomId);
-      
-      if (data.isPrivate) {
-        const id = localStorage.getItem('chat_user_id');
-        const otherUserId = data.roomId.replace('private_', '').replace(id, '').replace('_', '');
-        const friend = friends.find(f => f.userId === otherUserId);
-        if (friend) setPartnerName(friend.name);
-        else setPartnerName('Friend');
-      } else {
-        setPartnerName('Stranger');
-      }
-
-      if (myKeyPairRef.current) {
-        const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
-        socket.emit('exchange_keys', { roomId: data.roomId, publicKey: pubKeyBase64 });
-      }
-    });
-
-    // (Redundant rejoint/rejoin_failed removed)
-
-    socket.on('exchange_keys', async (data) => {
-      if (myKeyPairRef.current && data.publicKey) {
-        const partnerPubKey = await importPublicKey(data.publicKey);
-        const shared = await deriveSharedSecret(myKeyPairRef.current.privateKey, partnerPubKey);
-        setSharedKey(shared);
-        if (roomIdRef.current) {
-          const exported = await exportSharedKey(shared);
-          localStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
-        }
-      }
-    });
-
-    socket.on('chat_history', async (history) => {
-      const storedKey = localStorage.getItem(`shared_key_${roomIdRef.current}`);
-      const decryptHistory = async (key) => {
-        return await Promise.all(history.map(async (msg) => {
-          try {
-            const decrypted = await decryptWithKey(msg.message, key);
-            return { ...msg, message: decrypted, rawContent: msg.message };
-          } catch (e) {
-            return { ...msg, message: "[Encrypted Message]", rawContent: msg.message };
-          }
-        }));
-      };
-      if (storedKey) {
-        try {
-          const key = await importSharedKey(storedKey);
-          const decrypted = await decryptHistory(key);
-          setMessages(decrypted);
-          socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: myUserId });
-        } catch (e) {
-          setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
-        }
-      } else {
-        setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
-      }
-    });
-
-    socket.on('receive_message', async (data) => {
-      if (data.roomId !== roomIdRef.current) {
-        setUnreadCounts(prev => ({
-          ...prev,
-          [data.senderId]: (prev[data.senderId] || 0) + 1
-        }));
-      }
-
-      let displayMessage = data.message;
-      let rawContent = data.message;
-      if (sharedKeyRef.current) {
-        try {
-          displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
-          rawContent = displayMessage;
-        } catch (e) {
-          displayMessage = "[Encrypted Message]";
-        }
-      } else {
-        displayMessage = "[Encrypted Message]";
-      }
-      if (data.type === 'image' && displayMessage !== "[Encrypted Message]" && displayMessage.startsWith('data:')) {
-        try {
-          const res = await fetch(displayMessage);
-          const blob = await res.blob();
-          displayMessage = URL.createObjectURL(blob);
-        } catch (e) { console.error("Blob conversion failed", e); }
-      }
-      setMessages((prev) => [...prev, { ...data, message: displayMessage, rawContent }]);
-      setIsPartnerTyping(false);
-      if (roomIdRef.current === data.roomId) {
-        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: myUserId });
-      }
-    });
-
-    socket.on('typing', (data) => {
-      setIsPartnerTyping(data.isTyping);
-    });
-
-    socket.on('message_deleted', (data) => {
-      setMessages((prev) => prev.filter(msg => msg.messageId !== data.messageId));
-    });
-
-    socket.on('chat_cleared', () => {
-      setMessages([]);
-    });
-
-    socket.on('messages_marked_seen', (data) => {
-      if (data.roomId === roomIdRef.current) {
-        setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
-      }
-    });
-
-    socket.on('vault_verify_result', (data) => {
-      if (data.success) {
-        setIsVaultUnlocked(true);
-        setShowVaultGate(null);
-        if (pendingPrivateChatId) {
-          socket.emit('start_private_chat', { friendId: pendingPrivateChatId });
-          setPendingPrivateChatId(null);
-          setMessages([]);
-        }
-      } else {
-        window.dispatchEvent(new CustomEvent('wrong-vault-pin'));
-      }
-    });
-
-    socket.on('friend_status_update', (data) => {
-      setFriends(prev => prev.map(f => 
-        f.userId === data.userId 
-          ? { ...f, 
-              isOnline: data.isOnline, 
-              activity: data.activity, 
-              roomId: data.roomId,
-              lastActive: data.lastActive 
-            } 
-          : f
-      ));
-    });
-
-    socket.on('profile_updated', (data) => {
-      setMyName(data.name);
-    });
-
-    socket.on('inform_sent', (data) => {
-      setIsSendingInform(false);
-      if (data.success) {
-        alert("Information sent successfully!");
-        setIsInformModalOpen(false);
-        setInformMessage('');
-      } else {
-        alert("Error: " + data.error);
-      }
-    });
-
-    socket.on('friend_added', (data) => {
-      setFriends(prev => {
-        const exists = prev.find(f => f.userId === data.userId);
-        if (exists) return prev;
-        return [...prev, { 
-          userId: data.userId, 
-          name: data.name, 
-          isOnline: data.isOnline,
-          avatarColor: data.avatarColor,
-          lastActive: data.lastActive
-        }];
-      });
-      setFriendRequests(prev => prev.filter(r => r.from !== data.userId));
-    });
-
-    socket.on('incoming_friend_request', (data) => {
-      setFriendRequests(prev => [...prev, data]);
-    });
-
-    socket.on('friend_removed', (data) => {
-      setFriends(prev => prev.filter(f => f.userId !== data.userId));
-    });
-
-    socket.on('init_data', (data) => {
-      setMyName(data.name || 'Stranger');
-      setNameInput(data.name || 'Stranger');
-      setFriends(data.friends || []);
-      setFriendRequests(data.pendingRequests || []);
-      setIsVaultEnabled(data.isVaultEnabled || false);
-    });
-
-    socket.on('partner_disconnected', () => {
-      if (roomIdRef.current?.startsWith('private_')) {
-        // For friends, we don't end the "Matched" state, we just show a system message
-        setMessages((prev) => [
-          ...prev,
-          { message: 'Partner is offline. You can still send messages.', senderId: 'system', timestamp: new Date().toISOString() }
-        ]);
-      } else {
-        setStatus('Disconnected');
-        setMessages((prev) => [
-          ...prev,
-          { message: 'Stranger has disconnected. Waiting for them to return...', senderId: 'system', timestamp: new Date().toISOString() }
-        ]);
-      }
-      endCall();
-    });
-
-    socket.on('partner_uploading_media', (data) => {
-      setPartnerMediaStatus(data.type);
-      setTimeout(() => setPartnerMediaStatus(null), 15000);
-    });
-    // ----------------------
-
-    return () => {
-      socket.off('connect');
-      socket.off('waiting');
-      socket.off('matched');
-      socket.off('user_count');
-      socket.off('receive_message');
-      socket.off('typing');
-      socket.off('partner_disconnected');
-      socket.off('rejoined');
-      socket.off('partner_rejoined');
-      socket.off('rejoin_failed');
-      socket.off('friend_added');
-      socket.off('friend_removed');
-      socket.off('friend_status_update');
-      socket.off('incoming_friend_request');
-      socket.off('init_data');
-      socket.off('profile_updated');
-      socket.off('inform_sent');
-      socket.off('exchange_keys');
-      socket.off('chat_history');
-      socket.off('messages_marked_seen');
-      socket.off('message_deleted');
-      socket.off('chat_cleared');
-      socket.off('partner_uploading_media');
-      socket.off('vault_verify_result');
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [myUserId, friends, pendingPrivateChatId]);
-
-  // --- STABLE WebRTC Signaling & Connection Persistence ---
-  // Define visibility handler before useEffect to avoid ReferenceError
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      setIsVaultUnlocked(false);
-    }
-  };
-
-  useEffect(() => {
-    socket.on('incoming_call', (data) => {
-      setIsReceivingCall(true);
-      setIncomingSignal(data.signal);
-      setCallType(data.type || 'audio');
-    });
-
-    socket.on('call_accepted', async (signal) => {
-      if (peerConnection.current) {
-        try {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-          setCallAccepted(true);
-          // Process queued candidates
-          while (iceCandidatesQueue.current.length > 0) {
-            const candidate = iceCandidatesQueue.current.shift();
-            await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-          }
-        } catch (err) {
-          console.error("Error setting remote description:", err);
-        }
-      }
-    });
-
-    socket.on('call_ended', () => {
-      endCall();
-    });
-
-    socket.on('ice_candidate', async (candidate) => {
-      try {
-        if (peerConnection.current && peerConnection.current.remoteDescription) {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } else {
-          iceCandidatesQueue.current.push(candidate);
-        }
-      } catch (err) {
-        console.error("Error adding ice candidate:", err);
-      }
-    });
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      socket.off('incoming_call');
-      socket.off('call_accepted');
-      socket.off('call_ended');
-      socket.off('ice_candidate');
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []); // Truly stable listeners
-
-  const startAudioAnalysis = (stream) => {
-    const context = new (window.AudioContext || window.webkitAudioContext)();
-    const source = context.createMediaStreamSource(stream);
-    const node = context.createAnalyser();
-    node.fftSize = 256;
-    source.connect(node);
-    
-    audioContext.current = context;
-    analyser.current = node;
-
-    const bufferLength = node.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const checkVolume = () => {
-      node.getByteFrequencyData(dataArray);
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      const average = sum / bufferLength;
-      setIsSpeaking(average > 10); // Threshold for speaking
-      animationFrame.current = requestAnimationFrame(checkVolume);
-    };
-    checkVolume();
-  };
-
-  const createPeerConnection = (roomId, type) => {
-    const pc = new RTCPeerConnection({ 
-      iceServers,
-      iceCandidatePoolSize: 10,
-      bundlePolicy: 'max-bundle',
-      rtcpMuxPolicy: 'require',
-      iceTransportPolicy: 'all' // Allows relay candidates (TURN)
-    });
-
-    pc.onicecandidateerror = (e) => {
-      console.warn("WebRTC: ICE Candidate Error:", e.errorCode, e.errorText);
-    };
-
-    let iceRestartCount = 0;
-    pc.oniceconnectionstatechange = () => {
-      const state = pc.iceConnectionState;
-      console.log("WebRTC: ICE Connection State:", state);
-      
-      if (state === 'connected' || state === 'completed') {
-        console.log("WebRTC: Connection established successfully!");
-      }
-
-      if (state === 'failed' || state === 'disconnected') {
-        if (iceRestartCount < 2) {
-          console.log("WebRTC: Connection stalled. Attempting ICE Restart...");
-          pc.restartIce();
-          iceRestartCount++;
-          pc.createOffer({ iceRestart: true }).then(offer => {
-            return pc.setLocalDescription(offer).then(() => {
-              socket.emit('call_user', { roomId, signalData: offer, type, isRestart: true });
-            });
-          }).catch(err => console.error("ICE Restart signaling failed:", err));
-        } else {
-          console.warn("WebRTC: Connection failed after retries. A TURN server is likely required for this network.");
-        }
-      }
-    };
-
-    pc.onnegotiationneeded = async () => {
-       try {
-         console.log("WebRTC: Negotiation needed...");
-         const offer = await pc.createOffer();
-         await pc.setLocalDescription(offer);
-         socket.emit('call_user', { roomId, signalData: offer, type });
-       } catch (err) {
-         console.error("Negotiation error:", err);
-       }
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit('ice_candidate', { roomId, candidate: event.candidate });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      console.log("WebRTC: Remote track received", event.track.kind);
-      setRemoteStream(event.streams[0]);
-    };
-
-    if (localStream.current) {
-      localStream.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStream.current);
-      });
-    }
-
-    peerConnection.current = pc;
-    return pc;
-  };
-
-  const toggleMic = () => {
-    if (localStream.current) {
-      const audioTrack = localStream.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMicMuted(!audioTrack.enabled);
-      }
-    }
-  };
-
-  const toggleCamera = () => {
-    if (localStream.current) {
-      const videoTrack = localStream.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsCameraOff(!videoTrack.enabled);
-      }
-    }
-  };
-
-  const switchCamera = async () => {
-    if (!localStream.current) return;
-    const newMode = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(newMode);
-    
-    try {
-      const oldTrack = localStream.current.getVideoTracks()[0];
-      if (oldTrack) oldTrack.stop();
-      
-      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newMode } });
-      const newTrack = newStream.getVideoTracks()[0];
-      
-      localStream.current.removeTrack(oldTrack);
-      localStream.current.addTrack(newTrack);
-      
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = localStream.current;
-      }
-      
-      if (peerConnection.current) {
-        const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(newTrack);
-      }
-    } catch (e) {
-      console.error("Camera switch failed:", e);
-    }
-  };
-
-  const startCall = async (type = 'audio') => {
-    try {
-      setCallType(type);
-      if (type === 'video') setIsVideoCall(true);
-      setIsCalling(true);
-
-      const constraints = { 
-        audio: true, 
-        video: type === 'video' ? { facingMode } : false
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      localStream.current = stream;
-      
-      if (type === 'video' && localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-      
-      startAudioAnalysis(stream);
-
-      const pc = createPeerConnection(roomId, type);
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: type === 'video'
-      });
-      await pc.setLocalDescription(offer);
-
-      socket.emit('call_user', { roomId, signalData: offer, type });
-    } catch (err) {
-      console.error("Failed to start call:", err);
-      alert("Could not access camera/microphone.");
-      setIsVideoCall(false);
-      setIsCalling(false);
-    }
-  };
-
-  const answerCall = async () => {
-    try {
-      const type = callType; // Capture the current type
-      if (type === 'video') setIsVideoCall(true);
-      setIsReceivingCall(false);
-      setCallAccepted(true);
-
-      const constraints = { 
-        audio: true, 
-        video: type === 'video' ? { facingMode } : false
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      localStream.current = stream;
-      
-      if (type === 'video' && localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      startAudioAnalysis(stream);
-
-      const pc = createPeerConnection(roomId, type);
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
-      
-      while (iceCandidatesQueue.current.length > 0) {
-        const candidate = iceCandidatesQueue.current.shift();
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      }
-
-      const answer = await pc.createAnswer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: type === 'video'
-      });
-      await pc.setLocalDescription(answer);
-
-      socket.emit('answer_call', { roomId, signalData: answer });
-    } catch (err) {
-      console.error("Failed to answer call:", err);
-      setIsVideoCall(false);
-    }
-  };
-
-  const endCall = () => {
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
-    if (localStream.current) {
-      localStream.current.getTracks().forEach(track => track.stop());
-      localStream.current = null;
-    }
-    if (audioContext.current) {
-      audioContext.current.close();
-      audioContext.current = null;
-    }
-    if (animationFrame.current) {
-      cancelAnimationFrame(animationFrame.current);
-    }
-    setRemoteStream(null);
-    setIsCalling(false);
-    setIsReceivingCall(false);
-    setCallAccepted(false);
-    setIsVideoCall(false);
-    setIncomingSignal(null);
-    setIsSpeaking(false);
-    setIsMicMuted(false);
-    setIsCameraOff(false);
-    iceCandidatesQueue.current = [];
-    socket.emit('end_call', { roomId });
-  };
-
-  const findNewPartner = () => {
-    if (!myUserId) return;
-    endCall();
-    socket.emit('leave_chat');
-    if (roomId) sessionStorage.removeItem(`shared_key_${roomId}`);
-    socket.emit('find_partner', { userId: myUserId });
-    setStatus('Waiting');
-    setMessages([]);
-    setRoomId(null);
-    setSharedKey(null);
-    sessionStorage.removeItem('current_room_id');
-  };
-
-  const endSession = () => {
-    endCall();
-    socket.emit('leave_chat');
-    if (roomId) sessionStorage.removeItem(`shared_key_${roomId}`);
-    setStatus('Idle');
-    setMessages([]);
-    setRoomId(null);
-    setSharedKey(null);
-    sessionStorage.removeItem('current_room_id');
-    setIsVaultUnlocked(false); // Re-lock the vault
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!inputText.trim() || !roomId) return;
-
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    let encryptedText = inputText;
-    
-    if (sharedKeyRef.current) {
-      encryptedText = await encryptWithKey(inputText, sharedKeyRef.current);
-    }
-    
-    const messageData = {
-      message: encryptedText,
-      roomId,
-      senderId: myUserId,
-      type: 'text',
-      status: 'sent',
-      messageId,
-      timestamp: new Date().toISOString()
-    };
-
-    socket.emit('send_message', messageData);
-    setMessages((prev) => [...prev, { ...messageData, message: inputText, status: 'sent' }]);
+  }, [localStream]);
+
+  // --- Event Handlers ---
+  const handleSendMessage = (e) => {
+    e?.preventDefault();
+    if (!inputText.trim()) return;
+    sendMessage(inputText);
     setInputText('');
-    socket.emit('typing', { roomId, isTyping: false });
   };
 
-  const compressImage = (base64Str, maxWidth = 1200, maxHeight = 1200) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = base64Str;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height *= maxWidth / width;
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width *= maxHeight / height;
-            height = maxHeight;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality JPEG
-      };
-    });
+  const handleTyping = (e) => {
+    setInputText(e.target.value);
+    if (!roomId) return;
+    socket.emit('typing', { roomId, isTyping: true });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('typing', { roomId, isTyping: false });
+    }, 2000);
   };
 
-  const handleImageUpload = (e) => {
+  const handleDragStart = (e) => {
+    isDragging.current = true;
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    dragStartStatusBarY.current = statusBarY;
+  };
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!isDragging.current) return;
+      const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+      const deltaY = clientY - dragStartY.current;
+      const newY = Math.max(10, Math.min(window.innerHeight - 100, dragStartStatusBarY.current + deltaY));
+      setStatusBarY(newY);
+    };
+    const handleEnd = () => { isDragging.current = false; };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [statusBarY]);
+
+  // --- Stealth Mode ---
+  useEffect(() => {
+    const originalTitle = "Aura";
+    if (isStealthMode) {
+      document.title = "System Task Manager";
+    } else {
+      document.title = originalTitle;
+    }
+    return () => { document.title = originalTitle; };
+  }, [isStealthMode]);
+
+  // --- Pull to Refresh ---
+  const handleTouchStartRefresh = (e) => {
+    pullStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMoveRefresh = (e) => {
+    if (pullStartY.current === 0) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - pullStartY.current;
+    if (diff > 0 && window.scrollY === 0) {
+      const newOffset = Math.min(diff * 0.5, 120);
+      setPullOffset(newOffset);
+      if (newOffset > 10 && e.cancelable) e.preventDefault();
+    }
+  };
+
+  const handleTouchEndRefresh = () => {
+    if (pullOffset > 90) {
+      setPullOffset(100);
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      setPullOffset(0);
+    }
+    pullStartY.current = 0;
+  };
+
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !roomId) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image too large. Please select an image under 10MB.");
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = async () => {
       const rawBase64 = reader.result;
-      
-      // 1. Create a local temporary message (Ghost Preview)
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const localMsg = {
-        message: rawBase64,
-        roomId,
-        senderId: myUserId,
-        type: 'image',
-        messageId,
-        timestamp: new Date().toISOString(),
-        isUploading: true
-      };
-      setMessages((prev) => [...prev, localMsg]);
-
-      // 2. Notify partner
-      socket.emit('uploading_media', { roomId, type: 'image' });
-
-      // 3. Compress and Send
-      const compressedBase64 = await compressImage(rawBase64);
-      
-      let finalMessage = compressedBase64;
-      if (sharedKeyRef.current) {
-        finalMessage = await encryptWithKey(compressedBase64, sharedKeyRef.current);
-      }
-
-      const messageData = {
-        message: finalMessage,
-        roomId,
-        senderId: myUserId,
-        type: 'image',
-        status: 'sent',
-        messageId,
-        timestamp: new Date().toISOString()
-      };
-
-      socket.emit('send_message', messageData);
-      
-      // 4. Update the local message once done
-      let localDisplay = compressedBase64;
-      try {
-        const res = await fetch(compressedBase64);
-        const blob = await res.blob();
-        localDisplay = URL.createObjectURL(blob);
-      } catch (e) {}
-
-      setMessages((prev) => prev.map(m => 
-        m.messageId === messageId 
-          ? { ...m, message: localDisplay, isUploading: false, rawContent: finalMessage, status: 'sent' } 
-          : m
-      ));
-      setPartnerMediaStatus(null);
+      sendMessage(rawBase64, 'image');
     };
     reader.readAsDataURL(file);
-    // Reset input
-    e.target.value = '';
-  };
-
-  const deleteMessage = (messageId) => {
-    if (!roomId) return;
-    socket.emit('delete_message', { roomId, messageId });
-    setMessages((prev) => prev.filter(msg => msg.messageId !== messageId));
-  };
-
-  const sendFriendRequest = () => {
-    if (!roomId) return;
-    socket.emit("send_friend_request", { roomId });
-    alert("Friend request sent!");
-  };
-
-  const acceptFriendRequest = (fromUserId) => {
-    socket.emit("accept_friend_request", { fromUserId });
-  };
-
-  const removeFriend = (friendId) => {
-    if (window.confirm("Are you sure you want to remove this friend?")) {
-      socket.emit("remove_friend", { friendId });
-    }
   };
 
   const startPrivateChat = (friendId) => {
     setUnreadCounts(prev => ({ ...prev, [friendId]: 0 }));
     endCall();
-    
-    // Lock vault to protect privacy
     setIsVaultUnlocked(false);
-    
     if (isVaultEnabled) {
       setPendingPrivateChatId(friendId);
       setShowVaultGate('verify');
@@ -1146,45 +248,9 @@ const Home = () => {
     }
   };
 
-  const handleSetVaultPin = (pin) => {
-    socket.emit('set_vault_password', { password: pin });
-    setIsVaultUnlocked(true); // Automatically unlock since user just created it
-  };
-
-  const handleVerifyVaultPin = (pin) => {
-    socket.emit('verify_vault_password', { password: pin });
-  };
-
-  const clearChat = () => {
-    if (!roomId) return;
-    if (window.confirm("Are you sure you want to delete ALL messages in this chat? This cannot be undone.")) {
-      socket.emit("clear_chat", { roomId });
-      setMessages([]);
-    }
-  };
-
-  const updateProfile = () => {
-    if (!nameInput.trim()) return;
-    socket.emit("update_profile", { name: nameInput });
-    setIsSettingsOpen(false);
-  };
-
-  const handleSendInform = () => {
-    if (!informMessage.trim()) return;
-    setIsSendingInform(true);
-    socket.emit("inform_owner", { message: informMessage, senderName: myName });
-  };
-
-  const handleTyping = (e) => {
-    setInputText(e.target.value);
-    if (!roomId) return;
-
-    socket.emit('typing', { roomId, isTyping: true });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing', { roomId, isTyping: false });
-    }, 2000);
+  const deleteMessage = (messageId) => {
+    socket.emit('delete_message', { roomId, messageId });
+    setMessages(prev => prev.filter(msg => msg.messageId !== messageId));
   };
 
   return (
@@ -1200,251 +266,65 @@ const Home = () => {
           className="fixed top-0 left-0 right-0 z-[1000] flex justify-center pointer-events-none"
           style={{ transform: `translateY(${pullOffset - 40}px)`, opacity: Math.min(pullOffset / 60, 1) }}
         >
-          <div className="bg-[#1a1c2e] border border-white/10 p-3 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.2)] flex items-center justify-center">
-            <RefreshCw 
-              className={`w-5 h-5 text-blue-400 ${pullOffset > 90 ? 'animate-spin' : ''}`}
-              style={{ transform: `rotate(${pullOffset * 3}deg)` }}
-            />
+          <div className="bg-[#1a1c2e] border border-white/10 p-3 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.2)]">
+            <RefreshCw className={`w-5 h-5 text-blue-400 ${pullOffset > 90 ? 'animate-spin' : ''}`} />
           </div>
         </div>
       )}
-      {/* Hidden Audio for remote stream */}
+
       <audio ref={remoteAudioRef} autoPlay />
 
-      {/* Video Call Overlay */}
-      {isVideoCall && (
-        <div className="fixed inset-0 z-[150] bg-[#111] overflow-hidden animate-in fade-in duration-500">
-          
-          {/* Remote Video Container */}
-          <div 
-            className={`transition-all duration-500 absolute overflow-hidden ${
-              mainView === 'remote' 
-                ? 'inset-0 z-0' 
-                : 'top-6 right-6 w-32 h-48 md:w-48 md:h-72 z-40 rounded-2xl shadow-2xl border-2 border-white/20 cursor-pointer hover:scale-105'
-            }`}
-            onClick={() => mainView !== 'remote' && setMainView('remote')}
-          >
-            {!callAccepted ? (
-              <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 space-y-4 bg-[#171717]">
-                <div className={`border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin ${mainView === 'remote' ? 'w-16 h-16' : 'w-6 h-6 border-2'}`} />
-                {mainView === 'remote' && (
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-1">Connecting Video</h3>
-                    <p className="text-sm text-gray-400">Establishing secure connection...</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            )}
-          </div>
+      <CallOverlay 
+        isVideoCall={isVideoCall}
+        callAccepted={callAccepted}
+        mainView={mainView}
+        setMainView={setMainView}
+        remoteVideoRef={remoteVideoRef}
+        localVideoRef={localVideoRef}
+        isCameraOff={isCameraOff}
+        isMicMuted={isMicMuted}
+        isMirrored={isMirrored}
+        facingMode={facingMode}
+        partnerName={partnerName}
+        showVcChat={showVcChat}
+        setShowVcChat={setShowVcChat}
+        messages={messages}
+        myUserId={myUserId}
+        inputText={inputText}
+        setInputText={setInputText}
+        handleSendMessage={handleSendMessage}
+        toggleMic={toggleMic}
+        toggleCamera={toggleCamera}
+        switchCamera={() => {}} 
+        clearChat={() => socket.emit('clear_chat', { roomId })}
+        endCall={endCall}
+        vcChatRef={vcChatRef}
+      />
 
-          {/* Local Video Container */}
-          <div 
-            className={`transition-all duration-500 absolute overflow-hidden ${
-              mainView === 'local' 
-                ? 'inset-0 z-0' 
-                : 'top-6 right-6 w-32 h-48 md:w-48 md:h-72 z-40 rounded-2xl shadow-2xl border-2 border-white/20 cursor-pointer hover:scale-105'
-            }`}
-            onClick={() => mainView !== 'local' && setMainView('local')}
-          >
-            <video 
-              ref={localVideoRef} 
-              autoPlay 
-              playsInline 
-              muted 
-              className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : ''} ${isMirrored && facingMode === 'user' ? '-scale-x-100' : ''}`}
-            />
-            {isCameraOff && (
-              <div className="w-full h-full flex items-center justify-center bg-[#2a2a2a]">
-                <VideoOff className={`${mainView === 'local' ? 'w-16 h-16' : 'w-8 h-8'} text-gray-500`} />
-              </div>
-            )}
-          </div>
+      <IncomingCallModal 
+        isReceivingCall={isReceivingCall}
+        callType={isVideoCall ? 'video' : 'audio'}
+        partnerName={partnerName}
+        onDecline={endCall}
+        onAccept={answerCall}
+      />
 
-          {/* Overlay Info (Top Left) */}
-          <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 z-40">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-[13px] font-medium text-white">{friends.find(f => f.userId === roomId)?.name || partnerName || 'Stranger'}</span>
-          </div>
-
-          {/* Chat Overlay */}
-          {showVcChat && (
-            <div className="absolute bottom-[100px] left-0 w-full md:w-[400px] pointer-events-none flex flex-col justify-end px-4 py-6 z-40 animate-in slide-in-from-left-4 duration-300">
-              <div ref={vcChatRef} className="max-h-[300px] overflow-y-auto space-y-3 pointer-events-auto scrollbar-hide pr-2">
-                {messages.slice(-8).map((msg) => {
-                  const isMe = msg.senderId === myUserId;
-                  return (
-                    <div key={msg.messageId} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                      <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] backdrop-blur-xl border flex flex-col gap-1 ${
-                        isMe 
-                          ? 'bg-blue-600/80 border-blue-400/30 text-white shadow-[0_8px_16px_rgba(37,99,235,0.2)] rounded-br-sm' 
-                          : 'bg-black/60 border-white/10 text-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.4)] rounded-bl-sm'
-                      }`}>
-                        <span className={`text-[11px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                          {isMe ? 'You' : (friends.find(f => f.userId === roomId)?.name || 'Stranger')}
-                        </span>
-                        <span className="leading-snug">{msg.message}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Chat Input */}
-              <div className="mt-4 pointer-events-auto flex items-center gap-2 bg-black/50 backdrop-blur-xl rounded-full p-1.5 border border-white/10 shadow-xl">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleSendMessage(e); } }}
-                  className="flex-1 bg-transparent border-none outline-none text-white text-[14px] px-4"
-                />
-                <button onClick={handleSendMessage} className="p-2 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors">
-                  <ArrowUp className="w-5 h-5 text-white" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Bottom Floating Control Bar */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-4 bg-black/40 backdrop-blur-xl px-4 sm:px-6 py-3 rounded-full border border-white/10 z-50 shadow-2xl">
-            <button onClick={toggleMic} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
-              {isMicMuted ? <MicOff className="w-4 h-4 sm:w-5 h-5" /> : <Mic className="w-4 h-4 sm:w-5 h-5" />}
-            </button>
-            
-            <button onClick={toggleCamera} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
-              {isCameraOff ? <VideoOff className="w-4 h-4 sm:w-5 h-5" /> : <Video className="w-4 h-4 sm:w-5 h-5" />}
-            </button>
-
-            <button onClick={switchCamera} className="w-10 h-10 sm:w-12 sm:h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all md:hidden">
-              <RefreshCw className="w-4 h-4 sm:w-5 h-5" />
-            </button>
-
-            <button onClick={() => setShowVcChat(!showVcChat)} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${!showVcChat ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white'}`}>
-              <MessageCircle className="w-4 h-4 sm:w-5 h-5" />
-            </button>
-
-            <button onClick={clearChat} className="w-10 h-10 sm:w-12 sm:h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all" title="Clear Chat">
-              <Trash2 className="w-4 h-4 sm:w-5 h-5" />
-            </button>
-
-            <div className="w-[1px] h-6 sm:h-8 bg-white/20 mx-1 sm:mx-2" />
-
-            <button onClick={endCall} className="w-12 h-12 sm:w-14 sm:h-14 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
-              <PhoneOff className="w-5 h-5 sm:w-6 h-6" />
-            </button>
-          </div>
-        </div>
-      )}
-      
-      {/* Incoming Call Modal */}
-      {isReceivingCall && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#0a0b14]/80 backdrop-blur-xl animate-in fade-in duration-500">
-          {/* Animated Background Pulse */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] opacity-20 animate-pulse ${callType === 'video' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
-          </div>
-
-          <div className="relative bg-[#1a1c2e]/60 border border-white/10 backdrop-blur-2xl p-10 rounded-[40px] text-center max-w-sm w-full shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-300">
-            {/* Call Type Icon */}
-            <div className="relative mx-auto mb-10 w-24 h-24">
-              <div className={`w-full h-full rounded-[32px] flex items-center justify-center relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.3)] transition-all duration-500 ${
-                callType === 'video' ? 'bg-blue-600' : 'bg-green-600'
-              }`}>
-                {callType === 'video' ? <Video className="w-10 h-10 text-white" /> : <Phone className="w-10 h-10 text-white" />}
-              </div>
-              {/* Premium Pulsing Rings */}
-              <div className={`absolute inset-0 rounded-[32px] animate-pulse-soft opacity-30 blur-[2px] ${callType === 'video' ? 'bg-blue-400' : 'bg-green-400'}`}></div>
-              <div className={`absolute inset-0 rounded-[32px] animate-pulse-soft opacity-20 blur-[6px]`} style={{ animationDelay: '0.6s', backgroundColor: callType === 'video' ? '#60a5fa' : '#4ade80' }}></div>
-              <div className={`absolute inset-0 rounded-[32px] border-2 animate-pulse-soft opacity-40`} style={{ animationDelay: '1.2s', borderColor: callType === 'video' ? '#60a5fa' : '#4ade80' }}></div>
-            </div>
-
-            <div className="space-y-2 mb-10">
-              <h3 className="text-2xl font-black text-white tracking-tight">Incoming {callType === 'video' ? 'Video' : 'Voice'} Call</h3>
-              <p className="text-gray-400 font-medium px-4">
-                {partnerName || 'Stranger'} is inviting you to a private {callType === 'video' ? 'video session' : 'audio call'}.
-              </p>
-            </div>
-
-            <div className="flex gap-4">
-              <button 
-                onClick={endCall}
-                className="flex-1 py-4 px-6 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-2xl font-bold transition-all border border-white/5 hover:border-red-500/30 active:scale-95"
-              >
-                Decline
-              </button>
-              <button 
-                onClick={answerCall}
-                className={`flex-1 py-4 px-6 text-white rounded-2xl font-black transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 ${
-                  callType === 'video' 
-                    ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/25' 
-                    : 'bg-green-600 hover:bg-green-500 shadow-green-500/25'
-                }`}
-              >
-                Accept
-                <ArrowUp className="w-5 h-5 rotate-90" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* In-Call Draggable Status Bar */}
       {(isCalling || callAccepted) && (
-        <div 
-          style={{ top: `${statusBarY}px` }}
-          onMouseDown={handleDragStart}
-          onTouchStart={handleDragStart}
-          className={`fixed left-1/2 -translate-x-1/2 z-[80] bg-black/60 backdrop-blur-xl border px-4 py-2 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-3 transition-all cursor-move select-none active:scale-[0.98] ${
-            isSpeaking ? 'border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]' : 'border-white/10'
-          }`}
-        >
-          {/* Drag Handle */}
-          <div className="p-1 text-gray-600 hover:text-gray-400 transition-colors">
-            <GripVertical className="w-4 h-4" />
-          </div>
-
-          <div className="flex items-center gap-2 pr-1">
-            <div className={`w-2.5 h-2.5 rounded-full relative ${isSpeaking ? 'bg-green-500' : 'bg-gray-600'}`}>
-              {isSpeaking && <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></div>}
-            </div>
-            <span className="text-[13px] font-bold text-white tracking-tight whitespace-nowrap">
-              {callAccepted ? "On Call" : "Calling..."}
-            </span>
-            {isSpeaking && <Mic className="w-3.5 h-3.5 text-green-500 animate-pulse" />}
-          </div>
-
-          <div className="h-5 w-[1px] bg-white/10 mx-1" />
-
-          <div className="flex items-center gap-1.5">
-            <button 
-              onClick={(e) => { e.stopPropagation(); setIsSpeakerMode(!isSpeakerMode); }}
-              title={isSpeakerMode ? "Switch to Ear Mode" : "Switch to Speaker Mode"}
-              className={`p-2 rounded-xl transition-all ${
-                isSpeakerMode ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'hover:bg-white/5 text-gray-400'
-              }`}
-            >
-              {isSpeakerMode ? <Volume2 className="w-4 h-4" /> : <Volume1 className="w-4 h-4" />}
-            </button>
-
-            <button 
-              onClick={(e) => { e.stopPropagation(); endCall(); }}
-              title="End Call"
-              className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-500 rounded-xl transition-all border border-red-500/20"
-            >
-              <PhoneOff className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <DraggableStatusBar 
+          statusBarY={statusBarY}
+          onDragStart={handleDragStart}
+          isSpeaking={isSpeaking}
+          callAccepted={callAccepted}
+          isSpeakerMode={isSpeakerMode}
+          setIsSpeakerMode={setIsSpeakerMode}
+          onEndCall={endCall}
+        />
       )}
 
-      {/* Main Container */}
       <Sidebar 
         status={status} 
-        onNewChat={findNewPartner} 
-        onEndSession={endSession} 
+        onNewChat={findPartner} 
+        onEndSession={leaveChat} 
         userCount={userCount}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -1453,443 +333,98 @@ const Home = () => {
         callAccepted={callAccepted}
         friends={friends}
         onSelectFriend={startPrivateChat}
-        onRemoveFriend={removeFriend}
-        onInform={() => setIsInformModalOpen(true)}
+        onRemoveFriend={(id) => socket.emit('remove_friend', { friendId: id })}
+        onInform={() => {}} 
         onOpenSettings={() => setIsSettingsOpen(true)}
         currentRoomId={roomId}
         unreadCounts={unreadCounts}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#0a0b14]">
         {!isSocketConnected && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-4 bg-[#2f2f2f]/90 backdrop-blur-md border border-blue-500/30 px-6 py-3 rounded-2xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
-            <div className="relative">
-              <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-            </div>
-            <div className="flex flex-col">
-              <h2 className="text-sm font-bold text-white">Reconnecting</h2>
-              <p className="text-[11px] text-gray-400">Restoring your session...</p>
-            </div>
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-4 bg-[#2f2f2f]/90 backdrop-blur-md border border-blue-500/30 px-6 py-3 rounded-2xl shadow-2xl">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-white text-sm font-bold">Reconnecting...</span>
           </div>
         )}
-        {/* Header */}
-        <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0a0b14]/80 backdrop-blur-md z-40">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 -ml-2 md:hidden hover:bg-white/5 rounded-lg transition-colors"
-            >
-              <Menu className="w-5 h-5 text-gray-300" />
-            </button>
-            
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                <Shield className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[15px] font-bold text-white tracking-tight leading-none">
-                    {status === 'Matched' ? partnerName : 'Aura'}
-                  </h2>
-                  <div className={`w-2 h-2 rounded-full ${status === 'Matched' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-500'}`} />
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                    {status === 'Matched' ? 'Active Chat' : 'Secured Gateway'}
-                  </span>
-                </div>
+
+        <ChatHeader 
+          status={status}
+          partnerName={partnerName}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
+          onStartCall={startCall}
+          onEndSession={leaveChat}
+          onSendFriendRequest={() => socket.emit('send_friend_request', { roomId })}
+          showFriendAdd={partnerUserId && !friends.some(f => f.userId === partnerUserId)}
+          partnerUserId={partnerUserId}
+        />
+
+        <main className="flex-1 overflow-hidden relative flex flex-col">
+          {friendRequests.length > 0 && (
+            <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl">
+              <p className="text-sm text-white font-medium">{friendRequests[0].fromName} wants to be friends!</p>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from })} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Accept</button>
+                <button onClick={() => setFriendRequests(prev => prev.slice(1))} className="bg-gray-600 text-white px-3 py-1 rounded text-xs">Decline</button>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-1">
-            {status === 'Matched' && (
-              <>
-                <button 
-                  onClick={() => startCall('audio')}
-                  className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/5 rounded-lg transition-all"
-                >
-                  <Phone className="w-5 h-5" />
-                </button>
-                <button 
-                  onClick={() => startCall('video')}
-                  className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
-                >
-                  <Video className="w-5 h-5" />
-                </button>
-              </>
-            )}
-            
-            {(status === 'Matched' || status === 'Waiting' || status === 'Disconnected') && (
-              <button 
-                onClick={endSession} 
-                className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/5 rounded-lg transition-all" 
-                title="End Session"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            )}
+          <MatchmakingView 
+            status={status}
+            onStartSession={findPartner}
+            onCancelSearch={leaveChat}
+          />
 
-            {status === 'Matched' && partnerUserId && !friends.some(f => f.userId === partnerUserId) && (
-              <button 
-                onClick={sendFriendRequest} 
-                className="p-2 text-primary hover:bg-primary/5 rounded-lg transition-all" 
-                title="Add Friend"
-              >
-                <UserPlus className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* Chat Interface (Scrollable zone) */}
-        <main className="flex-1 overflow-hidden relative flex flex-col">
-            <>
-              {/* Friend Request Toast */}
-              {friendRequests.length > 0 && (
-                <div className="absolute top-4 right-4 z-50 bg-[#2f2f2f] border border-[#3d3d3d] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                      <UserPlus className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">{friendRequests[0].fromName || 'Stranger'}</p>
-                      <p className="text-xs text-gray-400">Wants to be friends!</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button 
-                      onClick={() => acceptFriendRequest(friendRequests[0].from)}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
-                    >
-                      Accept
-                    </button>
-                    <button 
-                      onClick={() => setFriendRequests(prev => prev.slice(1))}
-                      className="flex-1 bg-[#3d3d3d] hover:bg-[#4d4d4d] text-white text-xs py-1.5 rounded-lg font-medium transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {status === 'Idle' ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 animate-in fade-in duration-700">
-                  <div className="max-w-md space-y-6">
-                    <div className="w-24 h-24 gradient-primary rounded-[40px] flex items-center justify-center mx-auto mb-8 transform hover:scale-110 transition-transform duration-500 shadow-2xl shadow-primary/20">
-                      <Shield className="w-12 h-12 text-white" />
-                    </div>
-                    <h1 className="text-6xl font-black text-white tracking-tighter">Aura <br/><span className="text-primary">Chat</span></h1>
-                    <p className="text-gray-500 text-lg font-medium">Connect with the world, securely.</p>
-                  </div>
-
-                  <button 
-                    onClick={findNewPartner}
-                    className="group relative flex items-center gap-4 gradient-primary hover:opacity-90 text-white px-12 py-6 rounded-2xl font-bold text-xl transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-primary/20"
-                  >
-                    <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
-                    Start Aura Session
-                  </button>
-                </div>
-              ) : status === 'Waiting' ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 animate-in zoom-in duration-500">
-                  <div className="relative">
-                    <div className="w-32 h-32 border-4 border-blue-500/20 rounded-full" />
-                    <div className="absolute inset-0 w-32 h-32 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <Globe className="absolute inset-0 m-auto w-12 h-12 text-blue-500 animate-pulse" />
-                  </div>
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">Finding a Partner...</h2>
-                    <p className="text-gray-400 font-medium">Matching you with someone based on availability.</p>
-                  </div>
-                  <button 
-                    onClick={endSession}
-                    className="text-gray-500 hover:text-white text-sm font-medium underline underline-offset-4 transition-colors"
-                  >
-                    Cancel Search
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <ChatBox 
-                    messages={messages} 
-                    isPartnerTyping={isPartnerTyping} 
-                    socketId={myUserId} 
-                    status={status}
-                    onDeleteMessage={deleteMessage}
-                    partnerName={status === 'Matched' && partnerUserId ? (friends.find(f => f.userId === partnerUserId)?.name || 'Stranger') : 'Stranger'}
-                    onZoomImage={setZoomedImage}
-                  />
-                  {partnerMediaStatus && (
-                    <div className="absolute bottom-24 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                      <span className="text-[11px] font-bold text-white tracking-wider uppercase">
-                        {status === 'Matched' ? (friends.find(f => f.userId === roomId)?.name || 'Stranger') : 'Stranger'} is sending {partnerMediaStatus === 'image' ? 'a photo' : 'media'}...
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
+          {(status === 'Matched' || status === 'Disconnected' || roomId?.startsWith('private_')) && (
+            <ChatBox 
+              messages={messages} 
+              isPartnerTyping={isPartnerTyping} 
+              socketId={myUserId} 
+              status={status}
+              onDeleteMessage={deleteMessage}
+              partnerName={partnerName}
+              onZoomImage={setZoomedImage}
+            />
+          )}
         </main>
 
-        {/* Input Area */}
-        {status !== 'Idle' && !isStealthMode && (
-          <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pb-6 pt-2 z-20">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-              accept="image/*" 
-              className="hidden" 
-            />
-            <form 
-              onSubmit={handleSendMessage}
-              className="relative flex items-center bg-[#1a1c2e]/80 backdrop-blur-xl rounded-[28px] border border-white/10 focus-within:border-primary/50 transition-all shadow-2xl shadow-black/40"
-            >
-              <button
-                type="button"
-                onClick={() => fileInputRef.current.click()}
-                disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
-                className="pl-4 pr-2 text-gray-400 hover:text-primary transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-              <textarea
-                rows="1"
-                value={inputText}
-                onChange={handleTyping}
-                disabled={status !== 'Matched' && !roomId?.startsWith('private_')}
-                placeholder="Message..."
-                className="w-full bg-transparent text-white px-3 py-4 pr-12 resize-none focus:outline-none min-h-[56px] max-h-48 scrollbar-hide text-[15px]"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-              />
-              <button
-                type="submit"
-                disabled={(status !== 'Matched' && !roomId?.startsWith('private_')) || !inputText.trim()}
-                className={`absolute right-2 p-2 rounded-2xl transition-all ${
-                  inputText.trim() && status === 'Matched' 
-                    ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                    : 'bg-white/5 text-gray-600'
-                } ${status !== 'Matched' && roomId?.startsWith('private_') ? 'bg-primary text-white' : ''}`}
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
-            <p className="hidden sm:block text-[10px] text-center text-gray-500 mt-4 font-bold uppercase tracking-widest opacity-40">
-              Aura Platform &bull; End-to-End Encrypted Secure Tunnel
-            </p>
-          </footer>
-        )}
-        {/* Settings Modal */}
+        <ChatInput 
+          inputText={inputText}
+          handleTyping={handleTyping}
+          handleSendMessage={handleSendMessage}
+          handleImageUpload={handleImageUpload}
+          status={status}
+          roomId={roomId}
+          isStealthMode={isStealthMode}
+        />
+
         {isSettingsOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-[#2f2f2f] w-full max-w-sm rounded-3xl border border-[#3d3d3d] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="bg-[#2f2f2f] w-full max-w-sm rounded-3xl border border-[#3d3d3d] p-8 shadow-2xl">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-white">Profile Settings</h2>
-                <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-white">
-                  <CloseIcon className="w-6 h-6" />
-                </button>
+                <h2 className="text-xl font-bold text-white">Settings</h2>
+                <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-white"><CloseIcon className="w-6 h-6" /></button>
               </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Display Name</label>
-                  <input 
-                    type="text" 
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="Enter your name..."
-                    className="w-full bg-[#171717] border border-[#3d3d3d] rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
-                
-                <p className="text-xs text-gray-500 italic">
-                  This name will be shown to people you send friend requests to.
-                </p>
-                
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Mirror My Video</h4>
-                      <p className="text-[10px] text-gray-500">Flips your camera preview like a mirror</p>
-                    </div>
-                    <button 
-                      onClick={() => setIsMirrored(!isMirrored)}
-                      className={`w-12 h-6 rounded-full transition-all relative ${isMirrored ? 'bg-blue-600' : 'bg-gray-700'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isMirrored ? 'left-7' : 'left-1'}`} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Security & Vault</h4>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-white">Private Chat Vault</h4>
-                        <p className="text-[10px] text-gray-400">Lock friend list and history</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          if (!isVaultEnabled) {
-                            setShowVaultGate('setup');
-                          } else {
-                            const pass = prompt("Enter PIN to disable vault:");
-                            if (pass) socket.emit('toggle_vault', { enabled: false, password: pass });
-                          }
-                        }}
-                        className={`w-12 h-6 rounded-full transition-all relative ${isVaultEnabled ? 'bg-green-600' : 'bg-gray-700'}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isVaultEnabled ? 'left-7' : 'left-1'}`} />
-                      </button>
-                    </div>
-
-                    {isVaultEnabled && (
-                      <button 
-                        onClick={() => {
-                          const old = prompt("Enter old PIN:");
-                          if (old) {
-                            const newP = prompt("Enter new 4-digit PIN:");
-                            if (newP && newP.length === 4) {
-                              socket.emit('change_vault_password', { oldPassword: old, newPassword: newP });
-                            } else {
-                              alert("PIN must be 4 digits");
-                            }
-                          }
-                        }}
-                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/5 transition-colors"
-                      >
-                        Change Vault PIN
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <button 
-                  onClick={updateProfile}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-4 transition-colors"
-                >
-                  Save Profile
-                </button>
-              </div>
+              <input type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)} className="w-full bg-[#171717] border border-[#3d3d3d] rounded-xl px-4 py-3 text-white mb-4" placeholder="Enter name..." />
+              <button onClick={() => { socket.emit('update_profile', { name: nameInput }); setIsSettingsOpen(false); }} className="w-full bg-blue-600 text-white py-3 rounded-xl">Save</button>
             </div>
           </div>
         )}
       </div>
-      {/* Inform Modal */}
-      {isInformModalOpen && (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#2f2f2f] w-full max-w-md p-6 rounded-3xl border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-white">Inform Owner</h3>
-              <button onClick={() => setIsInformModalOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                <CloseIcon className="w-6 h-6 text-gray-400" />
-              </button>
-            </div>
-            
-            <p className="text-gray-400 text-sm mb-4">Send a direct message or feedback to the platform owner.</p>
-            
-            <textarea 
-              value={informMessage}
-              onChange={(e) => setInformMessage(e.target.value)}
-              placeholder="Type your message here..."
-              className="w-full h-40 bg-[#212121] border border-white/10 rounded-2xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors resize-none mb-6"
-            />
-            
-            <div className="flex gap-4">
-              <button 
-                onClick={() => setIsInformModalOpen(false)}
-                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSendInform}
-                disabled={isSendingInform || !informMessage.trim()}
-                className={`flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold transition-colors ${
-                  (isSendingInform || !informMessage.trim()) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isSendingInform ? 'Sending...' : 'Send Message'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Full Screen Image Modal - Top Level to avoid stacking context issues */}
+
       {zoomedImage && (
-        <div 
-          className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300"
-          onClick={() => setZoomedImage(null)}
-        >
-          {/* Header for Modal */}
-          <div className="absolute top-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
-            <div className="flex flex-col pointer-events-auto">
-              <span className="text-white font-bold text-lg">Aura View</span>
-              <span className="text-gray-400 text-xs">Securely Shared Media</span>
-            </div>
-            <div className="flex items-center gap-4 pointer-events-auto">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const link = document.createElement('a');
-                  link.href = zoomedImage;
-                  link.download = `practice_img_${Date.now()}.png`;
-                  link.click();
-                }}
-                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
-                title="Download"
-              >
-                <Download className="w-6 h-6" />
-              </button>
-              <button 
-                onClick={() => setZoomedImage(null)}
-                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
-              >
-                <CloseIcon className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          {/* Image Container */}
-          <div className="w-full h-full flex items-center justify-center p-4">
-            <img 
-              src={zoomedImage} 
-              alt="full-view" 
-              className="max-w-full max-h-[85vh] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 animate-in zoom-in-95 duration-300"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          
-          {/* Hint */}
-          <div className="absolute bottom-10 text-white/40 text-[13px] font-medium tracking-wide">
-            Tap anywhere to close
-          </div>
+        <div className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex items-center justify-center" onClick={() => setZoomedImage(null)}>
+          <img src={zoomedImage} alt="Zoomed" className="max-w-full max-h-[85vh] rounded-2xl" />
         </div>
       )}
 
-      {/* Vault Modal */}
       {showVaultGate && (
         <VaultGate 
           mode={showVaultGate}
-          onClose={() => {
-            setShowVaultGate(null);
-            setPendingPrivateChatId(null);
-          }}
-          onUnlock={handleVerifyVaultPin}
-          onSetPassword={handleSetVaultPin}
+          onClose={() => setShowVaultGate(null)}
+          onUnlock={(pin) => socket.emit('verify_vault_password', { password: pin })}
+          onSetPassword={(pin) => socket.emit('set_vault_password', { password: pin })}
         />
       )}
     </div>
