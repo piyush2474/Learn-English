@@ -356,10 +356,17 @@ io.on("connection", (socket) => {
 
   socket.on("clear_chat", async (data) => {
     const { roomId } = data;
-    if (roomId.startsWith('private_')) {
+    if (!roomId) return;
+
+    try {
+      // Delete from DB regardless of room type (if messages exist there)
       await Message.deleteMany({ roomId });
-      io.to(roomId).emit("chat_cleared", { roomId });
+    } catch (e) {
+      console.error("Failed to clear chat in DB:", e);
     }
+    
+    // Always notify both parties that chat was cleared
+    io.to(roomId).emit("chat_cleared", { roomId });
   });
 
   socket.on("mark_messages_seen", async (data) => {

@@ -1209,31 +1209,31 @@ const Home = () => {
           )}
 
           {/* Bottom Floating Control Bar */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/40 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 z-50 shadow-2xl">
-            <button onClick={toggleMic} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
-              {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-4 bg-black/40 backdrop-blur-xl px-4 sm:px-6 py-3 rounded-full border border-white/10 z-50 shadow-2xl">
+            <button onClick={toggleMic} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${isMicMuted ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
+              {isMicMuted ? <MicOff className="w-4 h-4 sm:w-5 h-5" /> : <Mic className="w-4 h-4 sm:w-5 h-5" />}
             </button>
             
-            <button onClick={toggleCamera} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
-              {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            <button onClick={toggleCamera} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${isCameraOff ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white'}`}>
+              {isCameraOff ? <VideoOff className="w-4 h-4 sm:w-5 h-5" /> : <Video className="w-4 h-4 sm:w-5 h-5" />}
             </button>
 
-            <button onClick={switchCamera} className="w-12 h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all md:hidden">
-              <RefreshCw className="w-5 h-5" />
+            <button onClick={switchCamera} className="w-10 h-10 sm:w-12 sm:h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all md:hidden">
+              <RefreshCw className="w-4 h-4 sm:w-5 h-5" />
             </button>
 
-            <button onClick={() => setShowVcChat(!showVcChat)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${!showVcChat ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white'}`}>
-              <MessageCircle className="w-5 h-5" />
+            <button onClick={() => setShowVcChat(!showVcChat)} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${!showVcChat ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white'}`}>
+              <MessageCircle className="w-4 h-4 sm:w-5 h-5" />
             </button>
 
-            <button onClick={clearChat} className="w-12 h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all" title="Clear Chat">
-              <Trash2 className="w-5 h-5" />
+            <button onClick={clearChat} className="w-10 h-10 sm:w-12 sm:h-12 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all" title="Clear Chat">
+              <Trash2 className="w-4 h-4 sm:w-5 h-5" />
             </button>
 
-            <div className="w-[1px] h-8 bg-white/20 mx-2" />
+            <div className="w-[1px] h-6 sm:h-8 bg-white/20 mx-1 sm:mx-2" />
 
-            <button onClick={endCall} className="w-14 h-14 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
-              <PhoneOff className="w-6 h-6" />
+            <button onClick={endCall} className="w-12 h-12 sm:w-14 sm:h-14 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
+              <PhoneOff className="w-5 h-5 sm:w-6 h-6" />
             </button>
           </div>
         </div>
