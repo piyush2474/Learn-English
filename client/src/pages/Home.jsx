@@ -495,8 +495,10 @@ const Home = () => {
           showFriendAdd={partnerUserId && Array.isArray(friends) && !friends.some(f => f.userId === partnerUserId)}
           partnerUserId={partnerUserId}
           partnerStatus={
-            status === 'Matched' && partnerUserId && Array.isArray(friends)
-              ? (friends.find(f => f.userId === partnerUserId)?.isOnline ? 'Online' : 'Offline') 
+            status === 'Matched' && partnerUserId
+              ? (Array.isArray(friends) && friends.some(f => f.userId === partnerUserId)
+                  ? (friends.find(f => f.userId === partnerUserId)?.isOnline ? 'Online' : 'Offline') 
+                  : 'Online')
               : null
           }
           onClearChat={handleClearChat}

@@ -209,7 +209,7 @@ io.on("connection", (socket) => {
       
       const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
       if (partnerSocketId) {
-        io.to(partnerSocketId).emit("incoming_friend_request", { from: socket.userId, fromName: me.name || "Stranger" });
+        io.to(partnerSocketId).emit("friend_request_received", { from: socket.userId, fromName: me.name || "Stranger" });
       }
     }
   });
@@ -324,6 +324,7 @@ io.on("connection", (socket) => {
       socket.emit("rejoined", { 
         roomId, 
         partnerUserId, 
+        partnerStatus: 'Online',
         partnerName: partner?.name || (roomId.startsWith('private_') ? 'Friend' : 'Stranger') 
       });
       socket.to(roomId).emit("partner_rejoined");
