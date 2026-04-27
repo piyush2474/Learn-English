@@ -243,8 +243,13 @@ const useChat = () => {
     });
 
     socket.on('friend_added', (data) => {
-      setFriends(prev => [...prev, data]);
-      setFriendRequests(prev => prev.filter(req => req.from !== data.userId));
+      console.log("Friend added event received:", data);
+      setFriends(prev => {
+        const currentFriends = Array.isArray(prev) ? prev : [];
+        if (currentFriends.some(f => f.userId === data.userId)) return currentFriends;
+        return [...currentFriends, data];
+      });
+      setFriendRequests(prev => (Array.isArray(prev) ? prev : []).filter(req => req.from !== data.userId));
     });
 
     socket.on('friend_removed', (data) => {
@@ -252,7 +257,12 @@ const useChat = () => {
     });
 
     socket.on('friend_request_received', (data) => {
-      setFriendRequests(prev => [...prev, data]);
+      console.log("Friend request received:", data);
+      setFriendRequests(prev => {
+        const current = Array.isArray(prev) ? prev : [];
+        if (current.some(r => r.from === data.from)) return current;
+        return [...current, data];
+      });
     });
 
     socket.on('messages_marked_seen', (data) => {
