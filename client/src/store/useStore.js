@@ -55,8 +55,12 @@ const useStore = create((set) => ({
   })),
   setPartnerMediaStatus: (status) => set({ partnerMediaStatus: status }),
   
-  setFriends: (friends) => set({ friends }),
-  setFriendRequests: (requests) => set({ friendRequests: requests }),
+  setFriends: (friends) => set((state) => ({ 
+    friends: typeof friends === 'function' ? friends(state.friends) : friends 
+  })),
+  setFriendRequests: (requests) => set((state) => ({ 
+    friendRequests: typeof requests === 'function' ? requests(state.friendRequests) : requests 
+  })),
   
   setIsSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
   setIsSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
