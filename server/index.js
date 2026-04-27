@@ -211,7 +211,6 @@ io.on("connection", (socket) => {
       // Emit to the partner's private room so all their tabs get the notification
       io.to(partnerId).emit("friend_request_received", { from: socket.userId, fromName: me.name || "Stranger" });
     }
-    }
   });
 
   socket.on("decline_friend_request", async (data) => {
@@ -309,7 +308,7 @@ io.on("connection", (socket) => {
       socket.userId = userId;
       room.sockets.set(userId, socket.id);
       onlineUsers.set(userId, { socketId: socket.id, status: 'busy', roomId });
-      broadcastStatusUpdate(userId, true, socket);
+      broadcastStatusUpdate(userId, true);
 
       // Cancel any pending disconnect notification
       if (disconnectTimeouts.has(roomId)) {
@@ -323,7 +322,7 @@ io.on("connection", (socket) => {
       const partnerEntry = onlineUsers.get(partnerUserId);
       if (partnerEntry) {
         onlineUsers.set(partnerUserId, { ...partnerEntry, status: 'busy', roomId });
-        broadcastStatusUpdate(partnerUserId, true, socket);
+        broadcastStatusUpdate(partnerUserId, true);
       }
 
       const partner = await User.findOne({ userId: partnerUserId });
@@ -431,7 +430,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     room.sockets.set(socket.userId, socket.id);
     onlineUsers.set(socket.userId, { socketId: socket.id, status: 'busy', roomId });
-    broadcastStatusUpdate(socket.userId, true, socket);
+    broadcastStatusUpdate(socket.userId, true);
 
     // If partner is online, bring them into the room
     if (partnerEntry) {
@@ -440,7 +439,7 @@ io.on("connection", (socket) => {
         partnerSocket.join(roomId);
         room.sockets.set(friendId, partnerEntry.socketId);
         onlineUsers.set(friendId, { ...partnerEntry, status: 'busy', roomId });
-        broadcastStatusUpdate(friendId, true, socket);
+        broadcastStatusUpdate(friendId, true);
       }
     }
 
