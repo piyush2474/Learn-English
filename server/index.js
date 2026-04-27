@@ -79,33 +79,7 @@ connectDB();
 const activeUsers = new Set();
 const onlineUsers = new Map(); // userId -> { socketId, status: 'available' | 'busy', roomId }
 
-const broadcastStatusUpdate = async (userId, isOnline, socketOrIo) => {
-  try {
-    const user = await User.findOne({ userId });
-    if (user && user.friends && user.friends.length > 0) {
-      const liveInfo = onlineUsers.get(userId);
-      const activity = isOnline ? (liveInfo?.status || 'available') : 'offline';
-      const lastActive = isOnline ? new Date() : user.lastActive;
-      const roomId = isOnline ? liveInfo?.roomId : null;
 
-      // Manually find all friends who are currently online
-      user.friends.forEach(friendId => {
-        const friendEntry = onlineUsers.get(friendId);
-        if (friendEntry && friendEntry.socketId) {
-          socketOrIo.to(friendEntry.socketId).emit('friend_status_update', {
-            userId,
-            isOnline,
-            activity,
-            roomId,
-            lastActive
-          });
-        }
-      });
-    }
-  } catch (e) {
-    console.error("Status broadcast error:", e);
-  }
-};
 
 const server = http.createServer(app);
 
@@ -119,7 +93,32 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7 // 10MB
 });
 
-const rooms = new Map(); // Store room state: roomId -> { users: Set(userIds), sockets: Map(userId -> socketId) }
+const rooms = new Map();
+
+const broadcastStatusUpdate = async (userId, isOnline) => {
+  try {
+    const user = await User.findOne({ userId });
+    if (user && user.friends && user.friends.length > 0) {
+      const liveInfo = onlineUsers.get(userId);
+      const activity = isOnline ? (liveInfo?.status || 'available') : 'offline';
+      const lastActive = isOnline ? new Date() : user.lastActive;
+      const roomId = isOnline ? liveInfo?.roomId : null;
+
+      // Manually find all friends who are currently online
+      user.friends.forEach(friendId => {
+        io.to(friendId).emit('friend_status_update', {
+          userId,
+          isOnline,
+          activity,
+          roomId,
+          lastActive
+        });
+      });
+    }
+  } catch (e) {
+    console.error("Status broadcast error:", e);
+  }
+};
 const disconnectTimeouts = new Map(); // roomId -> timeoutId
 
 const updateUserCount = () => {
@@ -139,6 +138,7 @@ io.on("connection", (socket) => {
       return;
     }
     socket.userId = userId;
+    socket.join(userId);
     
     // Store live activity info
     onlineUsers.set(userId, { socketId: socket.id, status: 'available', roomId: null });
@@ -208,9 +208,9 @@ io.on("connection", (socket) => {
       );
       
       const partnerSocketId = rooms.get(roomId).sockets.get(partnerId);
-      if (partnerSocketId) {
-        io.to(partnerSocketId).emit("friend_request_received", { from: socket.userId, fromName: me.name || "Stranger" });
-      }
+      // Emit to the partner's private room so all their tabs get the notification
+      io.to(partnerId).emit("friend_request_received", { from: socket.userId, fromName: me.name || "Stranger" });
+    }
     }
   });
 
@@ -239,7 +239,7 @@ io.on("connection", (socket) => {
     const me = await User.findOne({ userId: socket.userId });
     const other = await User.findOne({ userId: fromUserId });
 
-    socket.emit("friend_added", { 
+    io.to(socket.userId).emit("friend_added", { 
       userId: fromUserId, 
       name: other.name || "Stranger", 
       isOnline: isOtherOnline,
@@ -248,17 +248,14 @@ io.on("connection", (socket) => {
       avatarColor: other.avatarColor
     });
     
-    const otherUserEntry = onlineUsers.get(fromUserId);
-    if (otherUserEntry) {
-      io.to(otherUserEntry.socketId).emit("friend_added", { 
-        userId: socket.userId, 
-        name: me.name || "Stranger", 
-        isOnline: true,
-        activity: onlineUsers.get(socket.userId)?.status || 'available',
-        lastActive: me.lastActive,
-        avatarColor: me.avatarColor
-      });
-    }
+    io.to(fromUserId).emit("friend_added", { 
+      userId: socket.userId, 
+      name: me.name || "Stranger", 
+      isOnline: true,
+      activity: onlineUsers.get(socket.userId)?.status || 'available',
+      lastActive: me.lastActive,
+      avatarColor: me.avatarColor
+    });
   });
   socket.on("remove_friend", async (data) => {
     const { friendId } = data;
@@ -593,8 +590,8 @@ io.on("connection", (socket) => {
     const info2 = onlineUsers.get(userId2);
     if (info2) onlineUsers.set(userId2, { ...info2, status: 'busy', roomId });
 
-    broadcastStatusUpdate(userId1, true, io);
-    broadcastStatusUpdate(userId2, true, io);
+    broadcastStatusUpdate(userId1, true);
+    broadcastStatusUpdate(userId2, true);
 
     io.to(roomId).emit("matched", { roomId });
   });
@@ -618,7 +615,7 @@ io.on("connection", (socket) => {
         
         // Set user to available
         onlineUsers.set(userId, { ...info, status: 'available', roomId: null });
-        broadcastStatusUpdate(userId, true, socket);
+        broadcastStatusUpdate(userId, true);
 
         // Also set partner to available if they are online
         const partnerEntry = [...onlineUsers.entries()].find(([_, pInfo]) => pInfo.roomId === roomId && pInfo.socketId !== socket.id);
@@ -626,7 +623,7 @@ io.on("connection", (socket) => {
           const pUserId = partnerEntry[0];
           const pInfo = onlineUsers.get(pUserId);
           onlineUsers.set(pUserId, { ...pInfo, status: 'available', roomId: null });
-          broadcastStatusUpdate(pUserId, true, socket);
+          broadcastStatusUpdate(pUserId, true);
         }
       }
     }
@@ -647,11 +644,11 @@ io.on("connection", (socket) => {
     const userEntry = [...onlineUsers.entries()].find(([_, info]) => info.socketId === socket.id);
     if (userEntry) {
       const userId = userEntry[0];
-      handleLeave(); // Ensure room status is updated
+      await handleLeave(); // Ensure room status is updated
       
       onlineUsers.delete(userId);
       await User.findOneAndUpdate({ userId }, { isOnline: false, lastActive: new Date() });
-      broadcastStatusUpdate(userId, false, socket);
+      broadcastStatusUpdate(userId, false);
       console.log(`User disconnected: ${userId}`);
     }
     
