@@ -538,7 +538,13 @@ const Home = () => {
                       Accept
                     </button>
                     <button 
-                      onClick={() => setFriendRequests(prev => prev.slice(1))} 
+                      onClick={() => {
+                        const fromUserId = friendRequests[0]?.from;
+                        if (fromUserId) {
+                          socket.emit('decline_friend_request', { fromUserId });
+                          setFriendRequests(prev => prev.slice(1));
+                        }
+                      }} 
                       className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
                     >
                       Decline

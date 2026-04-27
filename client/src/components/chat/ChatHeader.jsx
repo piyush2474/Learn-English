@@ -23,11 +23,7 @@ const ChatHeader = ({
           <Menu className="w-5 h-5 text-gray-300" />
         </button>
         
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex flex-col">
+        <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <h2 className="text-[15px] font-bold text-white tracking-tight leading-none">
                 {status === 'Matched' ? partnerName : 'Aura'}

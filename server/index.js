@@ -214,6 +214,15 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("decline_friend_request", async (data) => {
+    const { fromUserId } = data;
+    if (!socket.userId) return;
+    await User.findOneAndUpdate(
+      { userId: socket.userId },
+      { $pull: { pendingRequests: { from: fromUserId } } }
+    );
+  });
+
   socket.on("accept_friend_request", async (data) => {
     const { fromUserId } = data;
     if (!socket.userId) return;
