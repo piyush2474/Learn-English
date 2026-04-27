@@ -517,7 +517,7 @@ const Home = () => {
                 <div className="absolute top-4 right-4 z-50 bg-[#1a1c2e] border border-white/10 p-5 rounded-2xl shadow-2xl animate-in slide-in-from-right duration-500 w-80">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
-                      {friendRequests[0].fromName?.charAt(0).toUpperCase()}
+                      {friendRequests[0]?.fromName?.charAt(0).toUpperCase() || 'S'}
                     </div>
                     <div>
                       <p className="text-sm text-white font-bold">{friendRequests[0]?.fromName || 'Stranger'}</p>
@@ -527,8 +527,11 @@ const Home = () => {
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {
-                        socket.emit('accept_friend_request', { fromUserId: friendRequests[0].from });
-                        setFriendRequests(prev => prev.slice(1));
+                        const fromUserId = friendRequests[0]?.from;
+                        if (fromUserId) {
+                          socket.emit('accept_friend_request', { fromUserId });
+                          setFriendRequests(prev => prev.slice(1));
+                        }
                       }} 
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
                     >
