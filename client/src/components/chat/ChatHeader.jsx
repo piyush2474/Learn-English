@@ -37,7 +37,6 @@ const ChatHeader = ({
             </div>
           </div>
         </div>
-      </div>
 
       <div className="flex items-center gap-1">
         {status === 'Matched' && (
