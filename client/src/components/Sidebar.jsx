@@ -146,7 +146,6 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
               )}
             </div>
           </div>
-        </div>
 
         <div className="px-3 py-6 flex items-center gap-3 mt-auto">
           <div className="relative flex items-center justify-center">
@@ -205,6 +204,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
             <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
             <span className="text-[13px] text-gray-400 group-hover:text-gray-200">End Session</span>
           </div>
+        </div>
       </div>
     </div>
     </>
