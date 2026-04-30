@@ -3,7 +3,7 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import { Globe } from 'lucide-react';
 
-const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage, partnerName, onZoomImage }) => {
+const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage, onEditMessage, partnerName, onZoomImage }) => {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -41,9 +41,11 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
               type={msg.type}
               messageId={msg.messageId}
               onDelete={onDeleteMessage}
+              onEdit={onEditMessage}
               status={msg.status}
               onZoom={onZoomImage}
               isUploading={msg.isUploading}
+              isEdited={msg.isEdited}
             />
           ))}
           

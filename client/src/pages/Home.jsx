@@ -49,7 +49,7 @@ const Home = () => {
   } = useStore();
 
   // --- Custom Hooks ---
-  const { initSocket, findPartner, sendMessage, leaveChat } = useChat();
+  const { initSocket, findPartner, sendMessage, editMessage, leaveChat } = useChat();
   const {
     isCalling,
     isReceivingCall,
@@ -73,7 +73,6 @@ const Home = () => {
   // --- Local Refs & UI State ---
   const [inputText, setInputText] = useState('');
   const [nameInput, setNameInput] = useState('');
-  const [pullOffset, setPullOffset] = useState(0);
   const [statusBarY, setStatusBarY] = useState(24);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [showVaultGate, setShowVaultGate] = useState(null);
@@ -89,7 +88,6 @@ const Home = () => {
   const [isSendingInform, setIsSendingInform] = useState(false);
   const [isFetchingWord, setIsFetchingWord] = useState(false);
 
-  const pullStartY = useRef(0);
   const dragStartY = useRef(0);
   const dragStartStatusBarY = useRef(0);
   const isDragging = useRef(false);
@@ -315,32 +313,6 @@ const Home = () => {
     return () => { document.title = originalTitle; };
   }, [isStealthMode]);
 
-  // --- Pull to Refresh ---
-  const handleTouchStartRefresh = (e) => {
-    pullStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchMoveRefresh = (e) => {
-    if (pullStartY.current === 0) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - pullStartY.current;
-    if (diff > 0 && window.scrollY === 0) {
-      const newOffset = Math.min(diff * 0.5, 120);
-      setPullOffset(newOffset);
-      if (newOffset > 10 && e.cancelable) e.preventDefault();
-    }
-  };
-
-  const handleTouchEndRefresh = () => {
-    if (pullOffset > 90) {
-      setPullOffset(100);
-      setTimeout(() => window.location.reload(), 500);
-    } else {
-      setPullOffset(0);
-    }
-    pullStartY.current = 0;
-  };
-
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !roomId) return;
@@ -350,6 +322,16 @@ const Home = () => {
       sendMessage(rawBase64, 'image');
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDownloadImage = (base64) => {
+    if (!base64) return;
+    const link = document.createElement('a');
+    link.href = base64;
+    link.download = `aura_image_${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const startPrivateChat = (friendId) => {
@@ -386,22 +368,7 @@ const Home = () => {
   return (
     <div 
       className="fixed inset-0 w-full h-[100dvh] bg-[#0a0b14] flex overflow-hidden font-sans select-none"
-      onTouchStart={handleTouchStartRefresh}
-      onTouchMove={handleTouchMoveRefresh}
-      onTouchEnd={handleTouchEndRefresh}
     >
-      {/* Pull to Refresh Indicator */}
-      {pullOffset > 0 && (
-        <div 
-          className="fixed top-0 left-0 right-0 z-[1000] flex justify-center pointer-events-none"
-          style={{ transform: `translateY(${pullOffset - 40}px)`, opacity: Math.min(pullOffset / 60, 1) }}
-        >
-          <div className="bg-[#1a1c2e] border border-white/10 p-3 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.2)]">
-            <RefreshCw className={`w-5 h-5 text-blue-400 ${pullOffset > 90 ? 'animate-spin' : ''}`} />
-          </div>
-        </div>
-      )}
-
       <audio ref={remoteAudioRef} autoPlay />
 
       <CallOverlay 
@@ -566,6 +533,7 @@ const Home = () => {
                   socketId={myUserId} 
                   status={status}
                   onDeleteMessage={deleteMessage}
+                  onEditMessage={editMessage}
                   partnerName={partnerName}
                   onZoomImage={setZoomedImage}
                 />
@@ -651,8 +619,40 @@ const Home = () => {
       </div>
 
       {zoomedImage && (
-        <div className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex items-center justify-center" onClick={() => setZoomedImage(null)}>
-          <img src={zoomedImage} alt="Zoomed" className="max-w-full max-h-[85vh] rounded-2xl" />
+        <div 
+          className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300" 
+          onClick={() => setZoomedImage(null)}
+        >
+          <div className="absolute top-6 right-6 flex items-center gap-4 z-[1001]">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownloadImage(zoomedImage);
+              }}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all active:scale-95 group shadow-xl border border-white/10"
+              title="Download Image"
+            >
+              <Download className="w-6 h-6 group-hover:translate-y-0.5 transition-transform" />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoomedImage(null);
+              }}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all active:scale-95 group shadow-xl border border-white/10"
+              title="Close"
+            >
+              <CloseIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+            </button>
+          </div>
+          <div className="relative max-w-[90vw] max-h-[80vh] flex items-center justify-center p-4">
+            <img 
+              src={zoomedImage} 
+              alt="Zoomed" 
+              className="max-w-full max-h-full rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.5)] object-contain" 
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>
       )}
 

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Menu, Shield, Phone, Video, LogOut, UserPlus, Trash2 } from 'lucide-react';
+import { Menu, Shield, Phone, Video, LogOut, UserPlus, Trash2, RefreshCw } from 'lucide-react';
 
 const ChatHeader = ({
   status,
@@ -39,6 +38,14 @@ const ChatHeader = ({
         </div>
 
       <div className="flex items-center gap-1">
+        <button 
+          onClick={() => window.location.reload()} 
+          className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/5 rounded-lg transition-all" 
+          title="Reload Page"
+        >
+          <RefreshCw className="w-5 h-5" />
+        </button>
+
         {status === 'Matched' && (
           <>
             <button 

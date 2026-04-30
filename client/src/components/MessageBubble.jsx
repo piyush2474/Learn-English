@@ -1,9 +1,30 @@
-import React, { useState } from 'react';
-import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck, Pencil, Save } from 'lucide-react';
 
-const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, partnerName, status, onZoom, isUploading }) => {
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [isRevealed, setIsRevealed] = useState(isSelf); // Auto-reveal own messages
+const MessageBubble = ({ 
+  message, 
+  isSelf, 
+  timestamp, 
+  type, 
+  messageId, 
+  onDelete, 
+  onEdit,
+  partnerName, 
+  status, 
+  onZoom, 
+  isUploading,
+  isEdited: initialIsEdited 
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message);
+  const [isRevealed, setIsRevealed] = useState(isSelf);
+  const editInputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [isEditing]);
 
   const handleDownload = (e) => {
     e.stopPropagation();
@@ -18,6 +39,23 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
   const handleImageClick = () => {
     if (isUploading) return;
     onZoom(message);
+  };
+
+  const handleSaveEdit = () => {
+    if (editText.trim() && editText !== message) {
+      onEdit(messageId, editText);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditText(message);
+    }
   };
 
   return (
@@ -37,16 +75,28 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
             ? 'gradient-primary text-white rounded-tr-none shadow-primary/20' 
             : 'glass-panel text-gray-100 rounded-tl-none border border-white/10'
           }
+          ${isEditing ? 'w-full min-w-[200px]' : ''}
         `}>
-          {/* Delete Button for Self Images */}
-          {isSelf && type === 'image' && !isUploading && (
-            <button 
-              onClick={() => onDelete(messageId)}
-              className="absolute -top-2 -left-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
-              title="Delete for Everyone"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+          {/* Actions for Self Messages */}
+          {isSelf && !isUploading && (
+            <div className="absolute -top-3 -left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              {type === 'text' && !isEditing && (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="p-1.5 bg-blue-500 text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
+                  title="Edit Message"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              )}
+              <button 
+                onClick={() => onDelete(messageId)}
+                className="p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
+                title="Delete for Everyone"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
           )}
 
           {/* Message Content */}
@@ -81,13 +131,42 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
 
                 <Maximize2 className="w-4 h-4 text-white/20 group-hover/img:text-white/60 transition-colors" />
               </div>
+            ) : isEditing ? (
+              <div className="flex flex-col gap-2 py-1">
+                <textarea
+                  ref={editInputRef}
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full bg-black/20 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[14px] focus:outline-none focus:border-white/30 resize-none min-h-[60px]"
+                />
+                <div className="flex justify-end gap-2">
+                  <button 
+                    onClick={() => { setIsEditing(false); setEditText(message); }}
+                    className="px-3 py-1 rounded-lg text-[11px] font-bold bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleSaveEdit}
+                    className="px-3 py-1 rounded-lg text-[11px] font-bold bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1"
+                  >
+                    <Save className="w-3 h-3" /> Save
+                  </button>
+                </div>
+              </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>
             )}
           </div>
 
-          {/* Timestamp and Status */}
-          <div className={`flex items-center justify-end gap-1 mt-1 ${isSelf ? 'text-white/40' : 'text-gray-500'}`}>
+          {/* Timestamp, Status and Edited tag */}
+          <div className={`flex items-center justify-end gap-1.5 mt-1 ${isSelf ? 'text-white/40' : 'text-gray-500'}`}>
+            {initialIsEdited && (
+              <span className="text-[9px] font-black italic uppercase tracking-tighter opacity-60">
+                Edited
+              </span>
+            )}
             <span className="text-[10px] font-medium">
               {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
@@ -103,9 +182,9 @@ const MessageBubble = ({ message, isSelf, timestamp, type, messageId, onDelete, 
           </div>
         </div>
       </div>
-
     </div>
   );
 };
 
 export default MessageBubble;
+

@@ -277,6 +277,25 @@ const useChat = () => {
       }
     });
 
+    socket.on('message_edited', async (data) => {
+      const { messageId, newContent } = data;
+      
+      let displayMessage = newContent;
+      if (sharedKeyRef.current) {
+        try {
+          displayMessage = await decryptWithKey(newContent, sharedKeyRef.current);
+        } catch (e) {
+          displayMessage = "[Encrypted Message]";
+        }
+      }
+
+      setMessages(prev => prev.map(m => 
+        m.messageId === messageId 
+          ? { ...m, message: displayMessage, rawContent: newContent, isEdited: true } 
+          : m
+      ));
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -296,6 +315,7 @@ const useChat = () => {
       socket.off('friend_request_received');
       socket.off('friend_added');
       socket.off('friend_removed');
+      socket.off('message_edited');
     };
   };
 
@@ -326,6 +346,19 @@ const useChat = () => {
     setMessages((prev) => [...prev, { ...msgData, message: text, rawContent: text }]);
   };
 
+  const editMessage = async (messageId, newText) => {
+    if (!newText.trim() || !roomId || !sharedKey) return;
+
+    const encrypted = await encryptWithKey(newText, sharedKey);
+    socket.emit('edit_message', { roomId, messageId, newContent: encrypted });
+
+    setMessages(prev => prev.map(m => 
+      m.messageId === messageId 
+        ? { ...m, message: newText, rawContent: newText, isEdited: true } 
+        : m
+    ));
+  };
+
   const leaveChat = () => {
     socket.emit('leave_chat');
     resetChat();
@@ -337,6 +370,7 @@ const useChat = () => {
     initSocket,
     findPartner,
     sendMessage,
+    editMessage,
     leaveChat
   };
 };

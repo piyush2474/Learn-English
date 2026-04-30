@@ -10,6 +10,11 @@ const messageSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  messageId: {
+    type: String,
+    required: true,
+    index: true
+  },
   message: { 
     type: String, 
     required: true 
@@ -23,6 +28,10 @@ const messageSchema = new mongoose.Schema({
     type: String,
     enum: ['sent', 'seen'],
     default: 'sent'
+  },
+  isEdited: {
+    type: Boolean,
+    default: false
   },
   timestamp: { 
     type: Date, 

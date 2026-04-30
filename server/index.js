@@ -364,6 +364,7 @@ io.on("connection", (socket) => {
         await new Message({
           roomId,
           senderId,
+          messageId,
           message,
           type: type || 'text',
           status: 'sent',
@@ -551,6 +552,25 @@ io.on("connection", (socket) => {
   socket.on("delete_message", (data) => {
     const { roomId, messageId } = data;
     socket.to(roomId).emit("message_deleted", { messageId });
+  });
+
+  socket.on("edit_message", async (data) => {
+    const { roomId, messageId, newContent } = data;
+    
+    // Broadcast to the other user
+    socket.to(roomId).emit("message_edited", { messageId, newContent });
+
+    // Persist if it's a private chat
+    if (roomId.startsWith('private_')) {
+      try {
+        await Message.findOneAndUpdate(
+          { roomId, messageId },
+          { message: newContent, isEdited: true }
+        );
+      } catch (e) {
+        console.error("Failed to edit message in DB:", e);
+      }
+    }
   });
 
   socket.on("exchange_keys", (data) => {
