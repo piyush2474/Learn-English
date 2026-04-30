@@ -241,7 +241,7 @@ const useChat = () => {
               rawContent: msg.message,
               messageId: msg.messageId || msg._id,
               isEdited: msg.isEdited || false,
-              replyTo: replyData,
+              replyTo: (replyData && replyData.message) ? replyData : null,
               reactions: msg.reactions || []
             };
           } catch (e) {
@@ -302,7 +302,7 @@ const useChat = () => {
             rawContent: msg.message,
             messageId: msg.messageId || msg._id,
             isEdited: msg.isEdited || false,
-            replyTo: replyData,
+            replyTo: (replyData && replyData.message) ? replyData : null,
             reactions: msg.reactions || []
           };
         } catch (e) {

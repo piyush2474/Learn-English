@@ -24,7 +24,27 @@ const MessageBubble = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editText, setEditText] = useState(message);
   const editInputRef = useRef(null);
+  const menuRef = useRef(null);
   const longPressTimer = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMobileActions(false);
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showMobileActions || showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showMobileActions, showEmojiPicker]);
 
   const romanticEmojis = ['❤️', '😘', '🥰', '💋', '👍', '🔥'];
 
@@ -96,7 +116,7 @@ const MessageBubble = ({
         )}
 
         {/* Reply Preview */}
-        {replyTo && (
+        {replyTo && replyTo.message && (
           <div className={`
             mb-[-8px] px-3 pt-2 pb-4 rounded-t-xl text-[12px] flex items-center gap-2 border-x border-t border-white/5
             ${isSelf ? 'bg-primary/30 mr-2' : 'bg-white/5 ml-2'}
@@ -123,7 +143,9 @@ const MessageBubble = ({
           ${isEditing ? 'w-full min-w-[200px]' : ''}
         `}>
           {/* Actions Menu */}
-          <div className={`
+          <div 
+            ref={menuRef}
+            className={`
             absolute -bottom-12 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-30 transition-all duration-200
             ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-[-10px] pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto'}
             ${isSelf ? 'right-0' : 'left-0'}
