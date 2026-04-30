@@ -16,6 +16,7 @@ const MessageBubble = ({
   isEdited: initialIsEdited 
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
   const [editText, setEditText] = useState(message);
   const [isRevealed, setIsRevealed] = useState(isSelf);
   const editInputRef = useRef(null);
@@ -60,7 +61,10 @@ const MessageBubble = ({
 
   return (
     <div className={`w-full px-4 py-2 flex ${isSelf ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-      <div className={`max-w-[85%] md:max-w-[70%] relative group ${isSelf ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div 
+        className={`max-w-[85%] md:max-w-[70%] relative group ${isSelf ? 'items-end' : 'items-start'} flex flex-col`}
+        onClick={() => isSelf && !isEditing && setShowMobileActions(!showMobileActions)}
+      >
         {/* Sender Name (only for partner) */}
         {!isSelf && (
           <span className="text-[12px] font-bold text-blue-400 ml-1 mb-1 opacity-80">
@@ -79,7 +83,10 @@ const MessageBubble = ({
         `}>
           {/* Actions for Self Messages */}
           {isSelf && !isUploading && (
-            <div className="absolute -top-3 -left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <div className={`
+              absolute -top-3 -left-2 flex gap-1 z-10 transition-all duration-200
+              ${showMobileActions ? 'opacity-100 scale-100' : 'opacity-0 scale-90 md:group-hover:opacity-100 md:group-hover:scale-100 pointer-events-none md:pointer-events-auto'}
+            `}>
               {type === 'text' && !isEditing && (
                 <button 
                   onClick={() => setIsEditing(true)}
