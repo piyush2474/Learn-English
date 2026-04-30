@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Plus, Send } from 'lucide-react';
+import { Plus, Send, X } from 'lucide-react';
 
 const ChatInput = ({
   inputText,

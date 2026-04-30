@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck, Pencil, Save } from 'lucide-react';
+import { User, Languages, Trash2, X, Maximize2, Download, Check, CheckCheck, Pencil, Save, Reply } from 'lucide-react';
 
 const MessageBubble = ({ 
   message, 
@@ -124,8 +124,8 @@ const MessageBubble = ({
         `}>
           {/* Actions Menu */}
           <div className={`
-            absolute -top-11 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 transition-all duration-200
-            ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-2 pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto'}
+            absolute -bottom-12 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-30 transition-all duration-200
+            ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-[-10px] pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto'}
             ${isSelf ? 'right-0' : 'left-0'}
             min-w-max
           `}>
@@ -148,7 +148,7 @@ const MessageBubble = ({
                 className="p-1.5 hover:bg-white/10 rounded-full transition-colors group/act"
                 title="Reply"
               >
-                <Languages className="w-3.5 h-3.5 text-blue-400 rotate-180 group-hover/act:scale-110" />
+                <Reply className="w-3.5 h-3.5 text-blue-400 group-hover/act:scale-110" />
               </button>
 
               {isSelf && type === 'text' && (
