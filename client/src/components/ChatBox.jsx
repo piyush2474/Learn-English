@@ -57,7 +57,7 @@ const ChatBox = ({
           </div>
         )}
 
-        <div className="flex flex-col w-full py-4 space-y-1">
+        <div className="flex flex-col w-full pt-14 pb-4 space-y-1">
           {hasMoreMessages && (
             <div className="w-full flex justify-center py-2">
               <button 

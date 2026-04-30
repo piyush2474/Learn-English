@@ -34,10 +34,16 @@ const MessageBubble = ({
   };
 
   const onTouchStart = () => {
-    longPressTimer.current = setTimeout(handleLongPress, 500);
+    longPressTimer.current = setTimeout(handleLongPress, 600);
   };
 
   const onTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+    }
+  };
+
+  const onTouchMove = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
     }
@@ -79,6 +85,7 @@ const MessageBubble = ({
         onContextMenu={(e) => { e.preventDefault(); handleLongPress(); }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+        onTouchMove={onTouchMove}
         onDoubleClick={() => onReact('❤️')}
       >
         {/* Sender Name */}
@@ -117,55 +124,58 @@ const MessageBubble = ({
         `}>
           {/* Actions Menu */}
           <div className={`
-            absolute -top-10 flex items-center gap-1 p-1 bg-[#1a1c2e] border border-white/10 rounded-full shadow-2xl z-20 transition-all duration-200
-            ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:pointer-events-auto'}
+            absolute -top-11 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 transition-all duration-200
+            ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-2 pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto'}
             ${isSelf ? 'right-0' : 'left-0'}
+            min-w-max
           `}>
             {/* Emoji Quick Picker */}
-            <div className="flex gap-1 px-1 border-r border-white/10 mr-1">
+            <div className="flex gap-0.5 px-1 border-r border-white/10 mr-0.5">
               {romanticEmojis.map(emoji => (
                 <button 
                   key={emoji}
                   onClick={(e) => { e.stopPropagation(); onReact(emoji); setShowEmojiPicker(false); setShowMobileActions(false); }}
-                  className="text-[16px] hover:scale-125 transition-transform p-1"
+                  className="w-7 h-7 flex items-center justify-center text-[18px] hover:scale-125 hover:bg-white/5 rounded-full transition-all"
                 >
                   {emoji}
                 </button>
               ))}
             </div>
             
-            <button 
-              onClick={(e) => { e.stopPropagation(); onReply(); setShowMobileActions(false); }}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-              title="Reply"
-            >
-              <Languages className="w-4 h-4 text-blue-400 rotate-180" />
-            </button>
-
-            {isSelf && type === 'text' && (
+            <div className="flex gap-0.5 px-0.5">
               <button 
-                onClick={(e) => { e.stopPropagation(); setIsEditing(true); setShowMobileActions(false); }}
-                className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                onClick={(e) => { e.stopPropagation(); onReply(); setShowMobileActions(false); }}
+                className="p-1.5 hover:bg-white/10 rounded-full transition-colors group/act"
+                title="Reply"
               >
-                <Pencil className="w-4 h-4 text-green-400" />
+                <Languages className="w-3.5 h-3.5 text-blue-400 rotate-180 group-hover/act:scale-110" />
               </button>
-            )}
 
-            {isSelf && (
+              {isSelf && type === 'text' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsEditing(true); setShowMobileActions(false); }}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors group/act"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-green-400 group-hover/act:scale-110" />
+                </button>
+              )}
+
+              {isSelf && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onDelete(messageId); setShowMobileActions(false); }}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors group/act"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400 group-hover/act:scale-110" />
+                </button>
+              )}
+              
               <button 
-                onClick={(e) => { e.stopPropagation(); onDelete(messageId); setShowMobileActions(false); }}
-                className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                onClick={(e) => { e.stopPropagation(); setShowMobileActions(false); setShowEmojiPicker(false); }}
+                className="p-1.5 hover:bg-white/10 rounded-full transition-colors group/act ml-1"
               >
-                <Trash2 className="w-4 h-4 text-red-400" />
+                <X className="w-3.5 h-3.5 text-gray-500 group-hover/act:text-white" />
               </button>
-            )}
-            
-            <button 
-              onClick={(e) => { e.stopPropagation(); setShowMobileActions(false); setShowEmojiPicker(false); }}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X className="w-4 h-4 text-gray-500" />
-            </button>
+            </div>
           </div>
 
           {/* Message Content */}
