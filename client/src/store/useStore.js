@@ -31,6 +31,8 @@ const useStore = create((set) => ({
   stealthWord: null,
   isVaultEnabled: false,
   isVaultUnlocked: false,
+  replyingTo: null,
+  hasMoreMessages: false,
   
   // Actions
   setStatus: (status) => set({ status }),
@@ -68,6 +70,8 @@ const useStore = create((set) => ({
   setStealthWord: (word) => set({ stealthWord: word }),
   setIsVaultEnabled: (isEnabled) => set({ isVaultEnabled: isEnabled }),
   setIsVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
+  setReplyingTo: (msg) => set({ replyingTo: msg }),
+  setHasMoreMessages: (has) => set({ hasMoreMessages: has }),
   
   // Complex actions
   resetChat: () => set({ 

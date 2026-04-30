@@ -3,14 +3,41 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import { Globe } from 'lucide-react';
 
-const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage, onEditMessage, partnerName, onZoomImage }) => {
+const ChatBox = ({ 
+  messages, 
+  isPartnerTyping, 
+  socketId, 
+  status, 
+  onDeleteMessage, 
+  onEditMessage, 
+  onReplyMessage,
+  onReactMessage,
+  loadMoreMessages,
+  hasMoreMessages,
+  partnerName, 
+  onZoomImage 
+}) => {
   const scrollRef = useRef(null);
+  const lastScrollHeight = useRef(0);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      // If we just loaded more messages, maintain scroll position relative to bottom
+      if (lastScrollHeight.current > 0) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight - lastScrollHeight.current;
+        lastScrollHeight.current = 0;
+      } else {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
     }
   }, [messages, isPartnerTyping]);
+
+  const handleLoadMore = () => {
+    if (scrollRef.current) {
+      lastScrollHeight.current = scrollRef.current.scrollHeight;
+    }
+    loadMoreMessages();
+  };
 
   return (
     <div 
@@ -29,8 +56,19 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
             </p>
           </div>
         )}
-        
+
         <div className="flex flex-col w-full py-4 space-y-1">
+          {hasMoreMessages && (
+            <div className="w-full flex justify-center py-2">
+              <button 
+                onClick={handleLoadMore}
+                className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-[12px] text-gray-400 font-bold uppercase tracking-wider transition-all"
+              >
+                Load Previous Messages
+              </button>
+            </div>
+          )}
+          
           {Array.isArray(messages) && messages.map((msg) => (
             <MessageBubble
               key={msg.messageId}
@@ -42,6 +80,10 @@ const ChatBox = ({ messages, isPartnerTyping, socketId, status, onDeleteMessage,
               messageId={msg.messageId}
               onDelete={onDeleteMessage}
               onEdit={onEditMessage}
+              onReply={() => onReplyMessage(msg)}
+              onReact={(emoji) => onReactMessage(msg.messageId, emoji)}
+              reactions={msg.reactions}
+              replyTo={msg.replyTo}
               status={msg.status}
               onZoom={onZoomImage}
               isUploading={msg.isUploading}

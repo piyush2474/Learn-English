@@ -30,6 +30,8 @@ const useChat = () => {
     setPartnerMediaStatus,
     setIsVaultEnabled,
     setIsVaultUnlocked,
+    replyingTo, setReplyingTo,
+    hasMoreMessages, setHasMoreMessages,
     resetChat
   } = useStore();
 
@@ -188,7 +190,11 @@ const useChat = () => {
       }
     });
 
-    socket.on('chat_history', async (history) => {
+    socket.on('chat_history', async (data) => {
+      const history = data.messages || [];
+      const hasMore = data.hasMore || false;
+      setHasMoreMessages(hasMore);
+
       if (!Array.isArray(history)) return;
 
       // Wait for shared key to be available
@@ -217,12 +223,26 @@ const useChat = () => {
         const decrypted = await Promise.all(history.map(async (msg) => {
           try {
             const decryptedMsg = await decryptWithKey(msg.message, key);
+            
+            // Decrypt reply if exists
+            let replyData = msg.replyTo;
+            if (replyData && replyData.message && replyData.type === 'text') {
+              try {
+                const decryptedReply = await decryptWithKey(replyData.message, key);
+                replyData = { ...replyData, message: decryptedReply };
+              } catch (e) {
+                replyData = { ...replyData, message: "[Encrypted Reply]" };
+              }
+            }
+
             return { 
               ...msg, 
               message: decryptedMsg, 
               rawContent: msg.message,
               messageId: msg.messageId || msg._id,
-              isEdited: msg.isEdited || false
+              isEdited: msg.isEdited || false,
+              replyTo: replyData,
+              reactions: msg.reactions || []
             };
           } catch (e) {
             return { 
@@ -230,7 +250,8 @@ const useChat = () => {
               message: msg.message, // Show raw if can't decrypt
               rawContent: msg.message,
               messageId: msg.messageId || msg._id,
-              isEdited: msg.isEdited || false
+              isEdited: msg.isEdited || false,
+              reactions: msg.reactions || []
             };
           }
         }));
@@ -243,9 +264,70 @@ const useChat = () => {
           message: "[Encrypted Message]", 
           rawContent: m.message,
           messageId: m.messageId || m._id,
-          isEdited: m.isEdited || false
+          isEdited: m.isEdited || false,
+          reactions: m.reactions || []
         })));
       }
+    });
+
+    socket.on('more_messages', async (data) => {
+      const history = data.messages || [];
+      const hasMore = data.hasMore || false;
+      setHasMoreMessages(hasMore);
+
+      if (!sharedKeyRef.current || history.length === 0) {
+        if (history.length > 0) {
+          setMessages(prev => [...history.map(m => ({ ...m, message: "[Encrypted]" })), ...prev]);
+        }
+        return;
+      }
+
+      const decrypted = await Promise.all(history.map(async (msg) => {
+        try {
+          const decryptedMsg = await decryptWithKey(msg.message, sharedKeyRef.current);
+          
+          let replyData = msg.replyTo;
+          if (replyData && replyData.message && replyData.type === 'text') {
+            try {
+              const decryptedReply = await decryptWithKey(replyData.message, sharedKeyRef.current);
+              replyData = { ...replyData, message: decryptedReply };
+            } catch (e) {
+              replyData = { ...replyData, message: "[Encrypted Reply]" };
+            }
+          }
+
+          return { 
+            ...msg, 
+            message: decryptedMsg, 
+            rawContent: msg.message,
+            messageId: msg.messageId || msg._id,
+            isEdited: msg.isEdited || false,
+            replyTo: replyData,
+            reactions: msg.reactions || []
+          };
+        } catch (e) {
+          return { ...msg, message: msg.message, reactions: msg.reactions || [] };
+        }
+      }));
+
+      setMessages(prev => [...decrypted, ...prev]);
+    });
+
+    socket.on('message_reaction_updated', (data) => {
+      const { messageId, emoji, userId } = data;
+      setMessages(prev => prev.map(m => {
+        if (m.messageId === messageId) {
+          const reactions = [...(m.reactions || [])];
+          const idx = reactions.findIndex(r => r.emoji === emoji && r.userId === userId);
+          if (idx > -1) {
+            reactions.splice(idx, 1);
+          } else {
+            reactions.push({ emoji, userId });
+          }
+          return { ...m, reactions };
+        }
+        return m;
+      }));
     });
 
     socket.on('user_count', (count) => setUserCount(count));
@@ -368,6 +450,8 @@ const useChat = () => {
       socket.off('friend_removed');
       socket.off('message_edited');
       socket.off('message_deleted');
+      socket.off('more_messages');
+      socket.off('message_reaction_updated');
     };
   };
 
@@ -394,8 +478,29 @@ const useChat = () => {
       status: 'sent'
     };
 
+    if (replyingTo) {
+      msgData.replyTo = {
+        messageId: replyingTo.messageId,
+        message: replyingTo.rawContent,
+        senderId: replyingTo.senderId,
+        type: replyingTo.type
+      };
+      setReplyingTo(null);
+    }
+
     socket.emit('send_message', msgData);
     setMessages((prev) => [...prev, { ...msgData, message: text, rawContent: text }]);
+  };
+
+  const loadMoreMessages = () => {
+    if (!roomId || messages.length === 0 || !hasMoreMessages) return;
+    const firstMsg = messages[0];
+    socket.emit('load_more_messages', { roomId, beforeTimestamp: firstMsg.timestamp });
+  };
+
+  const reactToMessage = (messageId, emoji) => {
+    if (!roomId) return;
+    socket.emit('react_to_message', { roomId, messageId, emoji });
   };
 
   const editMessage = async (messageId, newText) => {
@@ -423,6 +528,8 @@ const useChat = () => {
     findPartner,
     sendMessage,
     editMessage,
+    loadMoreMessages,
+    reactToMessage,
     leaveChat
   };
 };

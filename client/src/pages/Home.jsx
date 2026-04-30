@@ -21,6 +21,7 @@ import {
   exportKeyPair,
   importKeyPair,
 } from '../utils/crypto';
+import { compressImage } from '../utils/imageCompressor';
 
 const Home = () => {
   // --- Zustand Store ---
@@ -46,10 +47,12 @@ const Home = () => {
     partnerMediaStatus,
     partnerUserId,
     unreadCounts, setUnreadCounts,
+    replyingTo, setReplyingTo,
+    hasMoreMessages
   } = useStore();
 
   // --- Custom Hooks ---
-  const { initSocket, findPartner, sendMessage, editMessage, leaveChat } = useChat();
+  const { initSocket, findPartner, sendMessage, editMessage, loadMoreMessages, reactToMessage, leaveChat } = useChat();
   const {
     isCalling,
     isReceivingCall,
@@ -316,12 +319,18 @@ const Home = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !roomId) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const rawBase64 = reader.result;
-      sendMessage(rawBase64, 'image');
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      sendMessage(compressed, 'image');
+    } catch (err) {
+      console.error("Compression failed", err);
+      // Fallback to original
+      const reader = new FileReader();
+      reader.onload = async () => {
+        sendMessage(reader.result, 'image');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleDownloadImage = (base64) => {
@@ -534,6 +543,10 @@ const Home = () => {
                   status={status}
                   onDeleteMessage={deleteMessage}
                   onEditMessage={editMessage}
+                  onReplyMessage={(msg) => setReplyingTo(msg)}
+                  onReactMessage={reactToMessage}
+                  loadMoreMessages={loadMoreMessages}
+                  hasMoreMessages={hasMoreMessages}
                   partnerName={partnerName}
                   onZoomImage={setZoomedImage}
                 />
@@ -549,6 +562,8 @@ const Home = () => {
           handleImageUpload={handleImageUpload}
           status={status}
           roomId={roomId}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
           isStealthMode={isStealthMode}
         />
 

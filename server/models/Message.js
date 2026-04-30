@@ -33,11 +33,22 @@ const messageSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  replyTo: {
+    messageId: String,
+    message: String,
+    senderId: String,
+    type: { type: String, default: 'text' }
+  },
+  reactions: [{
+    emoji: String,
+    userId: String
+  }],
   timestamp: { 
     type: Date, 
     default: Date.now,
-    index: { expires: '24h' } // Automatically delete messages after 24 hours
+    index: { expires: '24h' }
   }
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('Message', messageSchema);

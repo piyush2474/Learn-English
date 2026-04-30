@@ -8,7 +8,9 @@ const ChatInput = ({
   handleImageUpload,
   status,
   roomId,
-  isStealthMode
+  isStealthMode,
+  replyingTo,
+  onCancelReply
 }) => {
   const fileInputRef = useRef(null);
 
@@ -18,6 +20,25 @@ const ChatInput = ({
 
   return (
     <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pb-6 pt-2 z-20">
+      {replyingTo && (
+        <div className="mb-2 mx-4 flex items-center gap-3 bg-[#1a1c2e]/90 backdrop-blur-xl border border-white/10 p-3 rounded-2xl animate-in slide-in-from-bottom-2 duration-300">
+          <div className="w-1 h-8 bg-primary rounded-full" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold text-primary uppercase tracking-wider">
+              Replying to {replyingTo.senderId === localStorage.getItem('chat_user_id') ? 'yourself' : 'partner'}
+            </p>
+            <p className="text-[13px] text-gray-400 truncate">
+              {replyingTo.type === 'image' ? 'Photo' : replyingTo.message}
+            </p>
+          </div>
+          <button 
+            onClick={onCancelReply}
+            className="p-1.5 hover:bg-white/5 rounded-full text-gray-500 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <input 
         type="file" 
         ref={fileInputRef} 

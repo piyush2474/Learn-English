@@ -337,13 +337,14 @@ io.on("connection", (socket) => {
 
       // Fetch and send chat history for private rooms
       if (roomId.startsWith('private_')) {
-        Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
-          const normalized = history.map(msg => {
+        Message.find({ roomId }).sort({ timestamp: -1 }).limit(30).then(history => {
+          const normalized = history.reverse().map(msg => {
             const obj = msg.toObject();
             obj.messageId = obj.messageId || obj._id.toString();
             return obj;
           });
-          socket.emit("chat_history", normalized);
+          const total = Message.countDocuments({ roomId });
+          socket.emit("chat_history", { messages: normalized, hasMore: history.length >= 30 });
         });
       }
     } else {
@@ -358,7 +359,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", async (data) => {
-    const { roomId, message, type, messageId, senderId } = data;
+    const { roomId, message, type, messageId, senderId, replyTo } = data;
     
     // Relay message instantly
     socket.to(roomId).emit("receive_message", data);
@@ -366,7 +367,7 @@ io.on("connection", (socket) => {
     // Persist if it's a private room (friends)
     if (roomId.startsWith('private_')) {
       try {
-        await new Message({
+        const msgDoc = {
           roomId,
           senderId,
           messageId,
@@ -374,10 +375,40 @@ io.on("connection", (socket) => {
           type: type || 'text',
           status: 'sent',
           timestamp: new Date()
-        }).save();
+        };
+        if (replyTo) msgDoc.replyTo = replyTo;
+        await new Message(msgDoc).save();
       } catch (e) {
         console.error("Failed to save message:", e);
       }
+    }
+  });
+
+  socket.on("load_more_messages", async (data) => {
+    const { roomId, beforeTimestamp, limit = 30 } = data;
+    if (!roomId) return;
+
+    try {
+      const query = { roomId };
+      if (beforeTimestamp) {
+        query.timestamp = { $lt: new Date(beforeTimestamp) };
+      }
+      const messages = await Message.find(query)
+        .sort({ timestamp: -1 })
+        .limit(limit);
+
+      const normalized = messages.reverse().map(msg => {
+        const obj = msg.toObject();
+        obj.messageId = obj.messageId || obj._id.toString();
+        return obj;
+      });
+
+      socket.emit("more_messages", {
+        messages: normalized,
+        hasMore: messages.length >= limit
+      });
+    } catch (e) {
+      console.error("Failed to load more messages:", e);
     }
   });
 
@@ -457,13 +488,13 @@ io.on("connection", (socket) => {
       partnerName: partner?.name || "Friend"
     });
 
-    Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
-      const normalized = history.map(msg => {
+    Message.find({ roomId }).sort({ timestamp: -1 }).limit(30).then(history => {
+      const normalized = history.reverse().map(msg => {
         const obj = msg.toObject();
         obj.messageId = obj.messageId || obj._id.toString();
         return obj;
       });
-      socket.emit("chat_history", normalized);
+      socket.emit("chat_history", { messages: normalized, hasMore: history.length >= 30 });
     });
   });
 
@@ -567,10 +598,8 @@ io.on("connection", (socket) => {
   socket.on("edit_message", async (data) => {
     const { roomId, messageId, newContent } = data;
     
-    // Broadcast to the other user
     socket.to(roomId).emit("message_edited", { messageId, newContent });
 
-    // Persist if it's a private chat
     if (roomId.startsWith('private_')) {
       try {
         await Message.findOneAndUpdate(
@@ -579,6 +608,35 @@ io.on("connection", (socket) => {
         );
       } catch (e) {
         console.error("Failed to edit message in DB:", e);
+      }
+    }
+  });
+
+  socket.on("react_to_message", async (data) => {
+    const { roomId, messageId, emoji } = data;
+    if (!socket.userId || !roomId || !messageId || !emoji) return;
+
+    // Update local messages state for the room
+    // Broadcast to the room
+    io.to(roomId).emit("message_reaction_updated", { messageId, emoji, userId: socket.userId });
+
+    // Persist in DB for private chats
+    if (roomId.startsWith('private_')) {
+      try {
+        const msg = await Message.findOne({ roomId, messageId });
+        if (msg) {
+          const existingIdx = msg.reactions.findIndex(
+            r => r.emoji === emoji && r.userId === socket.userId
+          );
+          if (existingIdx > -1) {
+            msg.reactions.splice(existingIdx, 1);
+          } else {
+            msg.reactions.push({ emoji, userId: socket.userId });
+          }
+          await msg.save();
+        }
+      } catch (e) {
+        console.error("Failed to save reaction:", e);
       }
     }
   });
