@@ -338,7 +338,12 @@ io.on("connection", (socket) => {
       // Fetch and send chat history for private rooms
       if (roomId.startsWith('private_')) {
         Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
-          socket.emit("chat_history", history);
+          const normalized = history.map(msg => {
+            const obj = msg.toObject();
+            obj.messageId = obj.messageId || obj._id.toString();
+            return obj;
+          });
+          socket.emit("chat_history", normalized);
         });
       }
     } else {
@@ -453,7 +458,12 @@ io.on("connection", (socket) => {
     });
 
     Message.find({ roomId }).sort({ timestamp: 1 }).limit(100).then(history => {
-      socket.emit("chat_history", history);
+      const normalized = history.map(msg => {
+        const obj = msg.toObject();
+        obj.messageId = obj.messageId || obj._id.toString();
+        return obj;
+      });
+      socket.emit("chat_history", normalized);
     });
   });
 

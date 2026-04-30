@@ -133,18 +133,29 @@ const useChat = () => {
 
       let displayMessage = data.message;
       let rawContent = data.message;
-      if (sharedKeyRef.current) {
-        try {
-          displayMessage = await decryptWithKey(data.message, sharedKeyRef.current);
-          rawContent = displayMessage;
-        } catch (e) {
-          displayMessage = "[Encrypted Message]";
+      
+      // Try to decrypt with current key, retry a few times if key isn't ready yet
+      let key = sharedKeyRef.current;
+      if (!key) {
+        // Wait briefly for key exchange to complete
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 300));
+          key = sharedKeyRef.current;
+          if (key) break;
         }
-      } else {
-        displayMessage = "[Encrypted Message]";
       }
 
-      if (data.type === 'image' && displayMessage !== "[Encrypted Message]" && displayMessage.startsWith('data:')) {
+      if (key) {
+        try {
+          displayMessage = await decryptWithKey(data.message, key);
+          rawContent = displayMessage;
+        } catch (e) {
+          console.warn("Decryption failed:", e);
+          displayMessage = data.message; // Show raw if decryption fails
+        }
+      }
+
+      if (data.type === 'image' && displayMessage.startsWith('data:')) {
         try {
           const res = await fetch(displayMessage);
           const blob = await res.blob();
@@ -152,7 +163,12 @@ const useChat = () => {
         } catch (e) { console.error("Blob conversion failed", e); }
       }
 
-      setMessages((prev) => [...(Array.isArray(prev) ? prev : []), { ...data, message: displayMessage, rawContent }]);
+      setMessages((prev) => [...(Array.isArray(prev) ? prev : []), { 
+        ...data, 
+        message: displayMessage, 
+        rawContent,
+        isEdited: data.isEdited || false 
+      }]);
       setIsPartnerTyping(false);
       
       if (roomIdRef.current === data.roomId) {
@@ -173,32 +189,62 @@ const useChat = () => {
     });
 
     socket.on('chat_history', async (history) => {
-      const storedKey = localStorage.getItem(`shared_key_${roomIdRef.current}`);
-      const decryptHistory = async (key) => {
-        if (!Array.isArray(history)) return [];
-        return await Promise.all(history.map(async (msg) => {
-          try {
-            const decrypted = await decryptWithKey(msg.message, key);
-            return { ...msg, message: decrypted, rawContent: msg.message };
-          } catch (e) {
-            return { ...msg, message: "[Encrypted Message]", rawContent: msg.message };
-          }
-        }));
-      };
+      if (!Array.isArray(history)) return;
 
+      // Wait for shared key to be available
+      let key = null;
+      const currentRoomId = roomIdRef.current;
+      const storedKey = localStorage.getItem(`shared_key_${currentRoomId}`);
+      
       if (storedKey) {
         try {
-          const key = await importSharedKey(storedKey);
-          const decrypted = await decryptHistory(key);
-          setMessages(decrypted);
-          socket.emit('mark_messages_seen', { roomId: roomIdRef.current, userId: localStorage.getItem('chat_user_id') });
+          key = await importSharedKey(storedKey);
         } catch (e) {
-          if (Array.isArray(history)) {
-            setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
-          }
+          console.error("Failed to import stored key", e);
         }
-      } else if (Array.isArray(history)) {
-        setMessages(history.map(m => ({ ...m, message: "[Encrypted Message]", rawContent: m.message })));
+      }
+
+      // If no stored key, wait for key exchange to complete
+      if (!key) {
+        for (let i = 0; i < 15; i++) {
+          await new Promise(r => setTimeout(r, 300));
+          key = sharedKeyRef.current;
+          if (key) break;
+        }
+      }
+
+      if (key) {
+        const decrypted = await Promise.all(history.map(async (msg) => {
+          try {
+            const decryptedMsg = await decryptWithKey(msg.message, key);
+            return { 
+              ...msg, 
+              message: decryptedMsg, 
+              rawContent: msg.message,
+              messageId: msg.messageId || msg._id,
+              isEdited: msg.isEdited || false
+            };
+          } catch (e) {
+            return { 
+              ...msg, 
+              message: msg.message, // Show raw if can't decrypt
+              rawContent: msg.message,
+              messageId: msg.messageId || msg._id,
+              isEdited: msg.isEdited || false
+            };
+          }
+        }));
+        setMessages(decrypted);
+        socket.emit('mark_messages_seen', { roomId: currentRoomId, userId: localStorage.getItem('chat_user_id') });
+      } else {
+        // No key available at all, show what we have
+        setMessages(history.map(m => ({ 
+          ...m, 
+          message: "[Encrypted Message]", 
+          rawContent: m.message,
+          messageId: m.messageId || m._id,
+          isEdited: m.isEdited || false
+        })));
       }
     });
 
@@ -296,6 +342,11 @@ const useChat = () => {
       ));
     });
 
+    socket.on('message_deleted', (data) => {
+      const { messageId } = data;
+      setMessages(prev => prev.filter(m => m.messageId !== messageId));
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -316,6 +367,7 @@ const useChat = () => {
       socket.off('friend_added');
       socket.off('friend_removed');
       socket.off('message_edited');
+      socket.off('message_deleted');
     };
   };
 

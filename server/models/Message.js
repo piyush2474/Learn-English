@@ -12,7 +12,7 @@ const messageSchema = new mongoose.Schema({
   },
   messageId: {
     type: String,
-    required: true,
+    default: () => Math.random().toString(36).substr(2, 9),
     index: true
   },
   message: { 
