@@ -727,10 +727,21 @@ io.on("connection", (socket) => {
   });
 
 
-  socket.on("delete_message", (data) => {
+  socket.on("delete_message", async (data) => {
     const { roomId, messageId } = data || {};
     if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
+
+    // Relay to partner
     socket.to(roomId).emit("message_deleted", { messageId });
+
+    // Persist deletion in DB for private chats
+    if (roomId.startsWith('private_')) {
+      try {
+        await Message.deleteOne({ roomId, messageId });
+      } catch (e) {
+        console.error("Failed to delete message from DB:", e);
+      }
+    }
   });
 
   socket.on("edit_message", async (data) => {

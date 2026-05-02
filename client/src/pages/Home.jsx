@@ -29,7 +29,8 @@ import {
 import {
   isSupabaseMediaEnabled,
   uploadChatMedia,
-  validateChatMediaFile
+  validateChatMediaFile,
+  deleteChatMedia
 } from '../utils/mediaUpload';
 
 const Home = () => {
@@ -503,11 +504,22 @@ const Home = () => {
     alert("Friend request sent!");
   };
 
-  const deleteMessage = (messageId) => {
+  const deleteMessage = async (messageId) => {
     if (editingMessage?.messageId === messageId) {
       setEditingMessage(null);
       setInputText('');
     }
+
+    // --- Clean up media from storage if applicable ---
+    const targetMsg = messages.find(m => m.messageId === messageId);
+    if (targetMsg && (targetMsg.type === 'image' || targetMsg.type === 'video')) {
+      const mediaUrl = targetMsg.message;
+      if (typeof mediaUrl === 'string' && mediaUrl.startsWith('https://')) {
+        // This is likely a Supabase URL, try to delete from storage
+        await deleteChatMedia(mediaUrl);
+      }
+    }
+
     socket.emit('delete_message', { roomId, messageId });
     setMessages(prev => prev.filter(msg => msg.messageId !== messageId));
   };

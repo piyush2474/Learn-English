@@ -114,3 +114,34 @@ export function isVideoMessagePayload(s) {
   if (typeof s !== 'string') return false;
   return isHttpsMediaUrl(s.trim());
 }
+
+/**
+ * Deletes a file from Supabase storage given its public URL.
+ */
+export async function deleteChatMedia(publicUrl) {
+  const supabase = getSupabase();
+  if (!supabase || !publicUrl) return;
+
+  try {
+    // Extract the relative path from the public URL
+    // Format: https://.../storage/v1/object/public/bucket-name/room_id/file.ext
+    const bucketFragment = `/${CHAT_MEDIA_BUCKET}/`;
+    const index = publicUrl.indexOf(bucketFragment);
+    if (index === -1) return;
+
+    const path = publicUrl.substring(index + bucketFragment.length);
+    if (!path) return;
+
+    const { error } = await supabase.storage
+      .from(CHAT_MEDIA_BUCKET)
+      .remove([path]);
+
+    if (error) {
+      console.warn("Supabase storage removal error:", error.message);
+    } else {
+      console.log("Media deleted from storage:", path);
+    }
+  } catch (err) {
+    console.error("Failed to delete media from storage:", err);
+  }
+}
