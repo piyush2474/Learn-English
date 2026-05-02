@@ -24,7 +24,7 @@ export async function decryptedImageToDisplayUrl(decrypted, messageType) {
   }
   if (/^https?:\/\//i.test(decrypted)) return decrypted;
   if (!decrypted.startsWith('data:')) return decrypted;
-  if (isGifDataUrl(decrypted)) return decrypted;
+
   try {
     const res = await fetch(decrypted);
     const blob = await res.blob();
