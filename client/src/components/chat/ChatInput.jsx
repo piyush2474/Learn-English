@@ -91,7 +91,7 @@ const ChatInput = forwardRef(function ChatInput(
         type="file"
         ref={fileInputRef}
         onChange={handleImageUpload}
-        accept="image/*,.gif"
+        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
         className="hidden"
       />
       <form
@@ -107,7 +107,9 @@ const ChatInput = forwardRef(function ChatInput(
           onClick={() => fileInputRef.current.click()}
           disabled={isDisabled || isEditing}
           title={
-            isEditing ? 'Finish editing before sending a photo' : 'Attach photo or GIF (GIF max 4 MB)'
+            isEditing
+              ? 'Finish editing before sending media'
+              : 'Photo, GIF, WebP, MP4, WebM (videos need Supabase)'
           }
           className="pl-4 pr-2 text-gray-400 hover:text-primary transition-colors disabled:opacity-30 disabled:pointer-events-none"
         >

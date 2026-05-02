@@ -16,15 +16,14 @@ export function readFileAsDataURL(file) {
 
 /**
  * After decrypt: blob URL for static images; keep data URL for GIF so frames animate in <img>.
+ * Remote https URLs (e.g. Supabase) are returned unchanged.
  */
 export async function decryptedImageToDisplayUrl(decrypted, messageType) {
-  if (
-    messageType !== 'image' ||
-    typeof decrypted !== 'string' ||
-    !decrypted.startsWith('data:')
-  ) {
+  if (messageType !== 'image' || typeof decrypted !== 'string') {
     return decrypted;
   }
+  if (/^https?:\/\//i.test(decrypted)) return decrypted;
+  if (!decrypted.startsWith('data:')) return decrypted;
   if (isGifDataUrl(decrypted)) return decrypted;
   try {
     const res = await fetch(decrypted);
@@ -34,6 +33,17 @@ export async function decryptedImageToDisplayUrl(decrypted, messageType) {
     console.error('Blob conversion failed', e);
     return decrypted;
   }
+}
+
+/** Resolve decrypted payload for image or video (URLs pass through). */
+export async function resolvedMediaForDisplay(decrypted, messageType) {
+  if (messageType === 'video') {
+    return typeof decrypted === 'string' ? decrypted : decrypted;
+  }
+  if (messageType === 'image') {
+    return decryptedImageToDisplayUrl(decrypted, 'image');
+  }
+  return decrypted;
 }
 
 /**

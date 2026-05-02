@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trash2, X, Maximize2, Check, CheckCheck, Pencil, Reply } from 'lucide-react';
 import { hasRenderableReply, getReplySnippetDisplay } from '../utils/replyPreview';
 import { isGifDataUrl } from '../utils/imageCompressor';
@@ -108,7 +108,22 @@ const MessageBubble = ({
   }, {});
 
   const actionsOpen = showMobileActions || showEmojiPicker;
-  const isGif = type === 'image' && typeof message === 'string' && isGifDataUrl(message);
+  const isGif =
+    type === 'image' &&
+    typeof message === 'string' &&
+    message.length > 0 &&
+    isGifDataUrl(message);
+
+  /** null = loading, true = ok, false = error */
+  const [mediaStatus, setMediaStatus] = useState(null);
+
+  useEffect(() => {
+    if (type !== 'image' && type !== 'video') return;
+    setMediaStatus(null);
+  }, [type, message, isUploading]);
+
+  const onMediaLoaded = useCallback(() => setMediaStatus(true), []);
+  const onMediaError = useCallback(() => setMediaStatus(false), []);
 
   return (
     <div
@@ -257,33 +272,102 @@ const MessageBubble = ({
           <div className="text-[15px] leading-relaxed break-words">
             {type === 'image' ? (
               <div
-                onClick={() => !isUploading && onZoom(message)}
-                className="relative mt-1 w-44 h-14 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer flex items-center px-3 gap-3 bg-black/20 hover:bg-black/40 transition-all"
+                onClick={() =>
+                  !isUploading && message && mediaStatus !== false && onZoom?.(message, 'image')
+                }
+                className={`relative mt-1 w-44 min-h-14 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img flex items-center px-3 gap-3 bg-black/20 transition-all ${
+                  isUploading || !message || mediaStatus === false
+                    ? 'cursor-default opacity-95'
+                    : 'cursor-pointer hover:bg-black/40'
+                }`}
               >
-                <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative">
-                  <img
-                    src={message}
-                    alt={isGif ? 'GIF preview' : 'Photo preview'}
-                    className={`w-full h-full object-cover ${isGif ? '' : 'blur-md scale-150'}`}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    {isUploading ? (
+                <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative bg-black/30">
+                  {message && !isUploading ? (
+                    <>
+                      <img
+                        src={message}
+                        alt={isGif ? 'GIF preview' : 'Photo preview'}
+                        className={`w-full h-full object-cover ${isGif ? '' : 'blur-md scale-150'} ${
+                          mediaStatus === true ? 'opacity-100' : 'opacity-0'
+                        } absolute inset-0`}
+                        loading="lazy"
+                        decoding="async"
+                        onLoad={onMediaLoaded}
+                        onError={onMediaError}
+                      />
+                      {mediaStatus !== true && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          {mediaStatus === false ? (
+                            <span className="text-[9px] text-red-300 px-1 text-center font-bold">
+                              Failed
+                            </span>
+                          ) : (
+                            <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
                       <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                    ) : (
+                    </div>
+                  )}
+                  {message && !isUploading && mediaStatus === true && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                       <Maximize2 className="w-4 h-4 text-white/70" />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col flex-1 min-w-0">
+                <div className="flex flex-col flex-1 min-w-0 py-2">
                   <span className="text-[13px] font-bold text-white/90 truncate uppercase tracking-wider">
-                    {isUploading ? 'Sending...' : isGif ? 'GIF' : 'Photo'}
+                    {isUploading ? 'Sending...' : mediaStatus === false ? 'Error' : isGif ? 'GIF' : 'Photo'}
                   </span>
                   <span className="text-[10px] text-white/40 font-medium truncate">
-                    {isGif ? 'Animated' : 'Tap to view'}
+                    {isUploading
+                      ? 'Uploading…'
+                      : mediaStatus === false
+                        ? 'Tap retry by reopening chat'
+                        : isGif
+                          ? 'Animated'
+                          : 'Tap to view'}
                   </span>
                 </div>
+              </div>
+            ) : type === 'video' ? (
+              <div
+                className={`relative mt-1 max-w-[min(100%,280px)] rounded-xl overflow-hidden border border-white/10 shadow-inner bg-black/40 ${
+                  isUploading || !message ? 'min-h-[120px]' : ''
+                }`}
+              >
+                {message && !isUploading ? (
+                  <>
+                    {mediaStatus === false ? (
+                      <div className="px-4 py-8 text-center text-[12px] text-red-300 font-medium">
+                        Couldn&apos;t load video
+                      </div>
+                    ) : (
+                      <video
+                        src={message}
+                        className="w-full max-h-[220px] object-contain bg-black"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        onLoadedData={onMediaLoaded}
+                        onError={onMediaError}
+                      />
+                    )}
+                    {mediaStatus === null && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
+                        <div className="w-8 h-8 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                    <span className="text-[11px] text-white/50 font-medium">Uploading video…</span>
+                  </div>
+                )}
               </div>
             ) : (
               <span className="whitespace-pre-wrap">{message}</span>

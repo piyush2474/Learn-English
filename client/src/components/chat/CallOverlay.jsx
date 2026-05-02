@@ -112,7 +112,17 @@ const CallOverlay = ({
                     <span className={`text-[11px] font-bold uppercase tracking-wider opacity-70 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
                       {isMe ? 'You' : partnerName}
                     </span>
-                    <span className="leading-snug">{msg.message}</span>
+                    {msg.type === 'image' && msg.message ? (
+                      <img
+                        src={msg.message}
+                        alt=""
+                        className="max-h-24 rounded-lg object-cover"
+                      />
+                    ) : msg.type === 'video' && msg.message ? (
+                      <span className="text-[12px] text-white/80">Video</span>
+                    ) : (
+                      <span className="leading-snug">{msg.message}</span>
+                    )}
                   </div>
                 </div>
               );

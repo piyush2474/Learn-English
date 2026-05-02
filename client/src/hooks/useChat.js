@@ -15,7 +15,8 @@ import {
   exportSharedKey,
   importSharedKey
 } from '../utils/crypto';
-import { decryptedImageToDisplayUrl } from '../utils/imageCompressor';
+import { resolvedMediaForDisplay } from '../utils/imageCompressor';
+import { isImageMessagePayload, isVideoMessagePayload } from '../utils/mediaUpload';
 
 const useChat = () => {
   const {
@@ -66,6 +67,9 @@ const useChat = () => {
       const key = sharedKeyRef.current;
       if (!rid || !key || cancelled) return;
 
+      if (item.type === 'image' && !isImageMessagePayload(item.text)) return;
+      if (item.type === 'video' && !isVideoMessagePayload(item.text)) return;
+
       let encrypted;
       try {
         encrypted = await encryptWithKey(item.text, key);
@@ -107,7 +111,8 @@ const useChat = () => {
         )
       );
 
-      socket.timeout(15000).emit('send_message', msgData, (err, ack) => {
+      const qTimeout = item.type === 'image' || item.type === 'video' ? 60000 : 15000;
+      socket.timeout(qTimeout).emit('send_message', msgData, (err, ack) => {
         if (cancelled) return;
         const ok = !err && ack && ack.ok;
         setMessages((prev) =>
@@ -256,17 +261,23 @@ const useChat = () => {
 
       let displayMessage = data.message;
       let rawContent = data.message;
-
-      if (key) {
-        displayMessage = await decryptToPlaintext(data.message, key);
-        rawContent = displayMessage;
-      }
-
-      displayMessage = await decryptedImageToDisplayUrl(displayMessage, data.type);
-
       let replyToNorm = null;
-      if (data.replyTo) {
-        replyToNorm = await normalizeReplyToFromServer(data.replyTo, key || null);
+
+      try {
+        if (key) {
+          displayMessage = await decryptToPlaintext(data.message, key);
+          rawContent = displayMessage;
+        }
+        displayMessage = await resolvedMediaForDisplay(displayMessage, data.type);
+        if (data.replyTo) {
+          replyToNorm = await normalizeReplyToFromServer(data.replyTo, key || null);
+        }
+      } catch (err) {
+        console.error('receive_message', err);
+        displayMessage =
+          data.type === 'image' || data.type === 'video'
+            ? ''
+            : '[Unable to decrypt]';
       }
 
       setMessages((prev) => {
@@ -339,7 +350,7 @@ const useChat = () => {
           history.map(async (msg) => {
             try {
               const decryptedMsg = await decryptToPlaintext(msg.message, key);
-              const displayMsg = await decryptedImageToDisplayUrl(decryptedMsg, msg.type);
+              const displayMsg = await resolvedMediaForDisplay(decryptedMsg, msg.type);
 
               let replyData = null;
               if (msg.replyTo) {
@@ -417,7 +428,7 @@ const useChat = () => {
         history.map(async (msg) => {
           try {
             const decryptedMsg = await decryptToPlaintext(msg.message, key);
-            const displayMsg = await decryptedImageToDisplayUrl(decryptedMsg, msg.type);
+            const displayMsg = await resolvedMediaForDisplay(decryptedMsg, msg.type);
 
             let replyData = null;
             if (msg.replyTo) {
@@ -631,14 +642,18 @@ const useChat = () => {
     socket.emit('find_partner', { userId: localStorage.getItem('chat_user_id') });
   };
 
-  const sendMessage = async (text, type = 'text') => {
+  const sendMessage = async (text, type = 'text', opts = {}) => {
     if (!roomId) return;
     if (type === 'image') {
-      if (typeof text !== 'string' || !text.startsWith('data:')) return;
+      if (!isImageMessagePayload(text)) return;
+    } else if (type === 'video') {
+      if (!isVideoMessagePayload(text)) return;
     } else if (!text || !String(text).trim()) {
       return;
     }
 
+    const replaceId = opts.replaceMessageId;
+    const messageId = replaceId || Math.random().toString(36).substr(2, 9);
     const senderId = localStorage.getItem('chat_user_id');
     let replyPayload = null;
     if (replyingTo) {
@@ -679,7 +694,6 @@ const useChat = () => {
       return;
     }
 
-    const messageId = Math.random().toString(36).substr(2, 9);
     const msgData = {
       roomId,
       message: encrypted,
@@ -691,9 +705,25 @@ const useChat = () => {
     };
     if (replyPayload) msgData.replyTo = replyPayload;
 
-    setMessages((prev) => [...prev, { ...msgData, message: text, rawContent: text }]);
+    setMessages((prev) => {
+      const row = {
+        ...msgData,
+        message: text,
+        rawContent: text,
+        isUploading: false
+      };
+      if (replaceId) {
+        if (!prev.some((m) => m.messageId === replaceId)) return [...prev, row];
+        return prev.map((m) =>
+          m.messageId === replaceId ? { ...m, ...row } : m
+        );
+      }
+      return [...prev, row];
+    });
 
-    socket.timeout(15000).emit('send_message', msgData, (err, ack) => {
+    const sendTimeoutMs =
+      type === 'image' || type === 'video' ? 60000 : 15000;
+    socket.timeout(sendTimeoutMs).emit('send_message', msgData, (err, ack) => {
       const ok = !err && ack && ack.ok;
       setMessages((prev) =>
         prev.map((m) =>

@@ -1,6 +1,5 @@
 import { decryptToPlaintext } from './crypto';
 import { isGifDataUrl } from './imageCompressor';
-
 export const REPLY_PREVIEW_MAX = 200;
 export const REPLY_UI_MAX = 100;
 export const ENCRYPTED_FALLBACK = 'Encrypted message';
@@ -35,11 +34,16 @@ export function buildReplyToPayload(replyingSnapshot) {
   const senderId = replyingSnapshot.senderId;
   const type = replyingSnapshot.type || 'text';
 
+  if (type === 'video') {
+    return { messageId, senderId, type, preview: 'Video', message: 'Video' };
+  }
+
   if (type === 'image') {
-    const label =
-      typeof replyingSnapshot.message === 'string' && isGifDataUrl(replyingSnapshot.message)
-        ? 'GIF'
-        : 'Photo';
+    const m = replyingSnapshot.message;
+    const isGif =
+      typeof m === 'string' &&
+      (isGifDataUrl(m) || /\.gif(\?|#|$)/i.test(m));
+    const label = isGif ? 'GIF' : 'Photo';
     return { messageId, senderId, type, preview: label, message: label };
   }
 
@@ -76,6 +80,10 @@ export async function normalizeReplyToFromServer(replyData, cryptoKey) {
     type: replyData.type || 'text'
   };
 
+  if (base.type === 'video') {
+    return { ...base, preview: 'Video', message: 'Video' };
+  }
+
   if (base.type === 'image') {
     return { ...base, preview: 'Photo', message: 'Photo' };
   }
@@ -108,6 +116,7 @@ export async function normalizeReplyToFromServer(replyData, cryptoKey) {
 /** One-line snippet for composer / compact bars */
 export function getReplySnippetDisplay(replyTo, max = REPLY_UI_MAX) {
   if (!replyTo) return '';
+  if (replyTo.type === 'video') return 'Video';
   if (replyTo.type === 'image') {
     const p = (replyTo.preview || replyTo.message || '').trim();
     if (p === 'GIF') return 'GIF';

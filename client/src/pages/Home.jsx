@@ -26,6 +26,11 @@ import {
   readFileAsDataURL,
   MAX_GIF_SIZE_BYTES
 } from '../utils/imageCompressor';
+import {
+  isSupabaseMediaEnabled,
+  uploadChatMedia,
+  validateChatMediaFile
+} from '../utils/mediaUpload';
 
 const Home = () => {
   // --- Zustand Store ---
@@ -82,7 +87,7 @@ const Home = () => {
   const [inputText, setInputText] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [statusBarY, setStatusBarY] = useState(24);
-  const [zoomedImage, setZoomedImage] = useState(null);
+  const [lightboxMedia, setLightboxMedia] = useState(null);
   const [showVaultGate, setShowVaultGate] = useState(null);
   const [pendingPrivateChatId, setPendingPrivateChatId] = useState(null);
   const pendingPrivateChatIdRef = useRef(null);
@@ -364,20 +369,73 @@ const Home = () => {
     return () => { document.title = originalTitle; };
   }, [isStealthMode]);
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleMediaUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file || !roomId) return;
+    if (!sharedKey) {
+      alert('Wait for the chat connection before sending media.');
+      return;
+    }
     if (editingMessage) {
       setEditingMessage(null);
       setInputText('');
     }
+
+    const v = validateChatMediaFile(file);
+    if (!v.ok) {
+      alert(v.error);
+      return;
+    }
+
+    const isVideo = v.kind === 'video';
+
+    if (isSupabaseMediaEnabled()) {
+      const messageId = `m_${Math.random().toString(36).slice(2, 12)}`;
+      const localPreview =
+        !isVideo && file.type.startsWith('image/')
+          ? URL.createObjectURL(file)
+          : '';
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          roomId,
+          messageId,
+          senderId: myUserId,
+          timestamp: new Date().toISOString(),
+          type: isVideo ? 'video' : 'image',
+          message: localPreview,
+          isUploading: true
+        }
+      ]);
+
+      try {
+        const { publicUrl } = await uploadChatMedia(file, { roomId, messageId });
+        if (localPreview) URL.revokeObjectURL(localPreview);
+        sendMessage(publicUrl, isVideo ? 'video' : 'image', { replaceMessageId: messageId });
+      } catch (err) {
+        console.error(err);
+        if (localPreview) URL.revokeObjectURL(localPreview);
+        setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
+        alert(err?.message || 'Upload failed. Check Supabase bucket and policies.');
+      }
+      return;
+    }
+
+    if (isVideo) {
+      alert(
+        'Video requires Supabase. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in client/.env'
+      );
+      return;
+    }
+
     try {
       if (file.type === 'image/gif') {
         if (file.size > MAX_GIF_SIZE_BYTES) {
           alert(
             `GIF is too large (max ${MAX_GIF_SIZE_BYTES / (1024 * 1024)} MB). Try a shorter or smaller file.`
           );
-          e.target.value = '';
           return;
         }
         const dataUrl = await readFileAsDataURL(file);
@@ -387,7 +445,7 @@ const Home = () => {
         sendMessage(compressed, 'image');
       }
     } catch (err) {
-      console.error('Image upload failed', err);
+      console.error('Image send failed', err);
       try {
         const fallback = await readFileAsDataURL(file);
         sendMessage(fallback, 'image');
@@ -395,17 +453,33 @@ const Home = () => {
         console.error(e2);
       }
     }
-    e.target.value = '';
   };
 
-  const handleDownloadImage = (base64) => {
-    if (!base64) return;
-    const link = document.createElement('a');
-    link.href = base64;
-    link.download = `aura_image_${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadMedia = async (url) => {
+    if (!url) return;
+    try {
+      if (url.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `aura_media_${Date.now()}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+      const res = await fetch(url, { mode: 'cors' });
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = obj;
+      link.download = `aura_media_${Date.now()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(obj);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const startPrivateChat = (friendId) => {
@@ -621,7 +695,12 @@ const Home = () => {
                   loadMoreMessages={loadMoreMessages}
                   hasMoreMessages={hasMoreMessages}
                   partnerName={partnerName}
-                  onZoomImage={setZoomedImage}
+                  onZoomImage={(url, mediaType) =>
+                    setLightboxMedia({
+                      url,
+                      kind: mediaType === 'video' ? 'video' : 'image'
+                    })
+                  }
                 />
               )}
             </>
@@ -633,7 +712,7 @@ const Home = () => {
           inputText={inputText}
           handleTyping={handleTyping}
           handleSendMessage={handleSendMessage}
-          handleImageUpload={handleImageUpload}
+          handleImageUpload={handleMediaUpload}
           status={status}
           roomId={roomId}
           replyingTo={replyingTo}
@@ -711,26 +790,31 @@ const Home = () => {
         )}
       </div>
 
-      {zoomedImage && (
-        <div 
-          className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300" 
-          onClick={() => setZoomedImage(null)}
+      {lightboxMedia?.url && (
+        <div
+          className="fixed inset-0 z-[1000] bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300"
+          onClick={() => setLightboxMedia(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={lightboxMedia.kind === 'video' ? 'Video' : 'Image'}
         >
           <div className="absolute top-6 right-6 flex items-center gap-4 z-[1001]">
-            <button 
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleDownloadImage(zoomedImage);
+                handleDownloadMedia(lightboxMedia.url);
               }}
               className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all active:scale-95 group shadow-xl border border-white/10"
-              title="Download Image"
+              title="Download"
             >
               <Download className="w-6 h-6 group-hover:translate-y-0.5 transition-transform" />
             </button>
-            <button 
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setZoomedImage(null);
+                setLightboxMedia(null);
               }}
               className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all active:scale-95 group shadow-xl border border-white/10"
               title="Close"
@@ -739,12 +823,23 @@ const Home = () => {
             </button>
           </div>
           <div className="relative max-w-[90vw] max-h-[80vh] flex items-center justify-center p-4">
-            <img 
-              src={zoomedImage} 
-              alt="Zoomed" 
-              className="max-w-full max-h-full rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.5)] object-contain" 
-              onClick={(e) => e.stopPropagation()}
-            />
+            {lightboxMedia.kind === 'video' ? (
+              <video
+                src={lightboxMedia.url}
+                controls
+                autoPlay
+                playsInline
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.5)] bg-black"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={lightboxMedia.url}
+                alt="Full size"
+                className="max-w-full max-h-full rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.5)] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
           </div>
         </div>
       )}

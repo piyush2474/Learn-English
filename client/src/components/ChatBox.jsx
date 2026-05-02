@@ -96,7 +96,7 @@ const ChatBox = ({
               reactions={msg.reactions}
               replyTo={msg.replyTo}
               status={msg.status}
-              onZoom={onZoomImage}
+              onZoom={(url, mediaType) => onZoomImage(url, mediaType || msg.type)}
               isUploading={msg.isUploading}
               isEdited={msg.isEdited}
             />
