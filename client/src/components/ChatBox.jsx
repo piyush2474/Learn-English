@@ -3,19 +3,26 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import { Globe } from 'lucide-react';
 
-const ChatBox = ({ 
-  messages, 
-  isPartnerTyping, 
-  socketId, 
-  status, 
-  onDeleteMessage, 
-  onEditMessage, 
+const canComposerEdit = (msg, socketId) =>
+  msg.type === 'text' &&
+  msg.senderId === socketId &&
+  msg.messageId &&
+  !String(msg.messageId).startsWith('q_') &&
+  (!msg.status || msg.status === 'sent' || msg.status === 'seen');
+
+const ChatBox = ({
+  messages,
+  isPartnerTyping,
+  socketId,
+  status,
+  onDeleteMessage,
+  onStartComposerEdit,
   onReplyMessage,
   onReactMessage,
   loadMoreMessages,
   hasMoreMessages,
-  partnerName, 
-  onZoomImage 
+  partnerName,
+  onZoomImage
 }) => {
   const scrollRef = useRef(null);
   const lastScrollHeight = useRef(0);
@@ -79,7 +86,11 @@ const ChatBox = ({
               type={msg.type}
               messageId={msg.messageId}
               onDelete={onDeleteMessage}
-              onEdit={onEditMessage}
+              onComposerEdit={
+                canComposerEdit(msg, socketId)
+                  ? () => onStartComposerEdit(msg)
+                  : undefined
+              }
               onReply={() => onReplyMessage(msg)}
               onReact={(emoji) => onReactMessage(msg.messageId, emoji)}
               reactions={msg.reactions}

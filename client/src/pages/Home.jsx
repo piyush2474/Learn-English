@@ -48,6 +48,7 @@ const Home = () => {
     partnerUserId,
     unreadCounts, setUnreadCounts,
     replyingTo, setReplyingTo,
+    editingMessage, setEditingMessage,
     hasMoreMessages
   } = useStore();
 
@@ -99,6 +100,7 @@ const Home = () => {
   const localVideoRef = useRef(null);
   const vcChatRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const composerInputRef = useRef(null);
 
   // --- Initialization ---
   useEffect(() => {
@@ -259,11 +261,53 @@ const Home = () => {
   }, [localStream]);
 
   // --- Event Handlers ---
+  const handleCancelComposerEdit = () => {
+    setEditingMessage(null);
+    setInputText('');
+  };
+
+  const handleStartComposerEdit = (msg) => {
+    if (msg.type !== 'text') return;
+    const mid = msg.messageId;
+    if (!mid || String(mid).startsWith('q_')) return;
+    setReplyingTo(null);
+    const text = typeof msg.message === 'string' ? msg.message : '';
+    setEditingMessage({ messageId: mid, originalText: text });
+    setInputText(text);
+    requestAnimationFrame(() => {
+      const el = composerInputRef.current;
+      if (el && typeof el.focus === 'function') {
+        el.focus();
+        const len = text.length;
+        if (typeof el.setSelectionRange === 'function') el.setSelectionRange(len, len);
+      }
+    });
+  };
+
+  const handleReplySelect = (msg) => {
+    setEditingMessage(null);
+    setReplyingTo(msg);
+  };
+
   const handleSendMessage = (e) => {
     e?.preventDefault();
-    if (!inputText.trim()) return;
+    const trimmed = inputText.trim();
+    if (!trimmed) return;
+
+    if (editingMessage) {
+      if (trimmed === editingMessage.originalText) {
+        handleCancelComposerEdit();
+        return;
+      }
+      editMessage(editingMessage.messageId, trimmed);
+      handleCancelComposerEdit();
+      if (roomId) socket.emit('typing', { roomId, isTyping: false });
+      return;
+    }
+
     sendMessage(inputText);
     setInputText('');
+    if (roomId) socket.emit('typing', { roomId, isTyping: false });
   };
 
   const handleTyping = (e) => {
@@ -319,6 +363,10 @@ const Home = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !roomId) return;
+    if (editingMessage) {
+      setEditingMessage(null);
+      setInputText('');
+    }
     try {
       const compressed = await compressImage(file);
       sendMessage(compressed, 'image');
@@ -365,6 +413,10 @@ const Home = () => {
   };
 
   const deleteMessage = (messageId) => {
+    if (editingMessage?.messageId === messageId) {
+      setEditingMessage(null);
+      setInputText('');
+    }
     socket.emit('delete_message', { roomId, messageId });
     setMessages(prev => prev.filter(msg => msg.messageId !== messageId));
   };
@@ -380,7 +432,7 @@ const Home = () => {
     >
       <audio ref={remoteAudioRef} autoPlay />
 
-      <CallOverlay 
+      <CallOverlay
         isVideoCall={isVideoCall}
         callAccepted={callAccepted}
         mainView={mainView}
@@ -399,6 +451,10 @@ const Home = () => {
         inputText={inputText}
         setInputText={setInputText}
         handleSendMessage={handleSendMessage}
+        editingMessage={editingMessage}
+        onCancelEdit={handleCancelComposerEdit}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
         toggleMic={toggleMic}
         toggleCamera={toggleCamera}
         switchCamera={async () => {
@@ -542,8 +598,8 @@ const Home = () => {
                   socketId={myUserId} 
                   status={status}
                   onDeleteMessage={deleteMessage}
-                  onEditMessage={editMessage}
-                  onReplyMessage={(msg) => setReplyingTo(msg)}
+                  onStartComposerEdit={handleStartComposerEdit}
+                  onReplyMessage={handleReplySelect}
                   onReactMessage={reactToMessage}
                   loadMoreMessages={loadMoreMessages}
                   hasMoreMessages={hasMoreMessages}
@@ -556,6 +612,7 @@ const Home = () => {
         </main>
 
         <ChatInput 
+          ref={composerInputRef}
           inputText={inputText}
           handleTyping={handleTyping}
           handleSendMessage={handleSendMessage}
@@ -564,6 +621,10 @@ const Home = () => {
           roomId={roomId}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
+          editingMessage={editingMessage}
+          onCancelEdit={handleCancelComposerEdit}
+          partnerName={partnerName}
+          myUserId={myUserId}
           isStealthMode={isStealthMode}
         />
 

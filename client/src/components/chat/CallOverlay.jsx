@@ -1,5 +1,11 @@
 import React from 'react';
-import { VideoOff, MicOff, Mic, Video, RefreshCw, MessageCircle, Trash2, PhoneOff, ArrowUp } from 'lucide-react';
+import { VideoOff, MicOff, Mic, Video, RefreshCw, MessageCircle, Trash2, PhoneOff, ArrowUp, X } from 'lucide-react';
+
+function snippet(text, max = 56) {
+  if (!text || typeof text !== 'string') return '';
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
 
 const CallOverlay = ({
   isVideoCall,
@@ -20,6 +26,10 @@ const CallOverlay = ({
   inputText,
   setInputText,
   handleSendMessage,
+  editingMessage,
+  onCancelEdit,
+  replyingTo,
+  onCancelReply,
   toggleMic,
   toggleCamera,
   switchCamera,
@@ -107,6 +117,40 @@ const CallOverlay = ({
               );
             })}
           </div>
+
+          {(editingMessage || replyingTo) && (
+            <div className="mt-3 pointer-events-auto space-y-2">
+              {editingMessage && (
+                <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-[12px] text-amber-100">
+                  <span className="font-semibold flex-1 truncate">
+                    Editing… {snippet(editingMessage.originalText, 48)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCancelEdit}
+                    className="rounded-full bg-black/40 p-1.5 hover:bg-black/60"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              {!editingMessage && replyingTo && (
+                <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[12px] text-gray-200">
+                  <span className="flex-1 truncate">
+                    To {replyingTo.senderId === myUserId ? 'You' : partnerName}: “
+                    {replyingTo.type === 'image' ? 'Photo' : snippet(replyingTo.message, 48)}”
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCancelReply}
+                    className="rounded-full bg-black/40 p-1.5 hover:bg-black/60"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Chat Input */}
           <div className="mt-4 pointer-events-auto flex items-center gap-2 bg-black/50 backdrop-blur-xl rounded-full p-1.5 border border-white/10 shadow-xl">

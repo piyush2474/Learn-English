@@ -32,6 +32,8 @@ const useStore = create((set) => ({
   isVaultEnabled: false,
   isVaultUnlocked: false,
   replyingTo: null,
+  /** WhatsApp-style composer edit: { messageId, originalText } */
+  editingMessage: null,
   hasMoreMessages: false,
   
   // Actions
@@ -71,6 +73,7 @@ const useStore = create((set) => ({
   setIsVaultEnabled: (isEnabled) => set({ isVaultEnabled: isEnabled }),
   setIsVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
   setReplyingTo: (msg) => set({ replyingTo: msg }),
+  setEditingMessage: (payload) => set({ editingMessage: payload }),
   setHasMoreMessages: (has) => set({ hasMoreMessages: has }),
   
   // Complex actions
@@ -80,7 +83,9 @@ const useStore = create((set) => ({
     roomId: null, 
     partnerName: 'Stranger',
     partnerUserId: null,
-    isPartnerTyping: false
+    isPartnerTyping: false,
+    replyingTo: null,
+    editingMessage: null
   }),
 }));
 
