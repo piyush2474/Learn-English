@@ -20,6 +20,11 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
+  const formatUnreadBadge = (n) => {
+    if (n > 99) return '99+';
+    return String(n);
+  };
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -75,7 +80,9 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
           </div>
           <div className="space-y-1">
             {Array.isArray(friends) && friends.length > 0 ? (
-              friends.map((friend, i) => (
+              friends.map((friend, i) => {
+                const unread = unreadCounts[friend.userId] || 0;
+                return (
                 <div 
                   key={i} 
                   onClick={() => {
@@ -88,15 +95,23 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                       : 'hover:bg-white/5 opacity-60 grayscale-[0.5]'
                   }`}
                 >
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <div 
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-[13px] font-bold text-white shadow-lg"
                       style={{ backgroundColor: friend.avatarColor || '#333' }}
                     >
                       {getInitials(friend.name)}
                     </div>
+                    {unread > 0 && (
+                      <span
+                        className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#25D366] text-[10px] font-bold text-white leading-none shadow-sm border-2 border-[var(--color-sidebar-bg,#171717)] tabular-nums"
+                        aria-label={`${unread} unread messages`}
+                      >
+                        {formatUnreadBadge(unread)}
+                      </span>
+                    )}
                     {friend.isOnline && (
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#171717] shadow-lg ${
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#171717] shadow-lg z-[1] ${
                         friend.roomId === currentRoomId ? 'bg-blue-500 shadow-blue-500/50' :
                         'bg-green-500 shadow-green-500/50'
                       }`} />
@@ -108,11 +123,6 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                       <span className="text-[13px] font-semibold text-gray-100 truncate">
                         {friend.name || 'Stranger'}
                       </span>
-                      {unreadCounts[friend.userId] > 0 && (
-                        <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)] animate-bounce">
-                          {unreadCounts[friend.userId]}
-                        </span>
-                      )}
                     </div>
                     <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
                       {friend.isOnline ? (
@@ -140,7 +150,8 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                ))
+                );
+              })
               ) : (
                 <div className="px-3 py-4 text-[11px] text-gray-500 italic">No friends yet. Start a chat to add some!</div>
               )}

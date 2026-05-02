@@ -7,6 +7,33 @@ const mongoose = require("mongoose");
 const User = require("./models/User");
 const Message = require("./models/Message");
 const { handleMatchmaking, removeFromQueue } = require("./socket/matchmaking");
+
+function privateDmRoomId(userIdA, userIdB) {
+  return `private_${[userIdA, userIdB].sort().join("_")}`;
+}
+
+async function fetchFriendUnreadCounts(userId, friendIds) {
+  if (!friendIds || friendIds.length === 0) return {};
+  const entries = await Promise.all(
+    friendIds.map(async (friendId) => {
+      const rid = privateDmRoomId(userId, friendId);
+      const c = await Message.countDocuments({
+        roomId: rid,
+        senderId: friendId,
+        status: "sent"
+      });
+      return [friendId, c];
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+async function joinAllFriendDmRooms(socket, friendIds, userId) {
+  if (!friendIds || !friendIds.length) return;
+  for (const fid of friendIds) {
+    socket.join(privateDmRoomId(userId, fid));
+  }
+}
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcrypt");
 require("dotenv").config();
@@ -187,7 +214,11 @@ io.on("connection", (socket) => {
     // Initial data fetch: Manually fetch friends because they are strings, not ObjectIds
     const freshUser = await User.findOne({ userId });
     if (freshUser) {
-      const friendsList = await User.find({ userId: { $in: freshUser.friends } });
+      const friendIds = Array.isArray(freshUser.friends) ? freshUser.friends : [];
+      await joinAllFriendDmRooms(socket, friendIds, userId);
+      const friendUnreadCounts = await fetchFriendUnreadCounts(userId, friendIds);
+
+      const friendsList = await User.find({ userId: { $in: friendIds } });
       const friendsData = friendsList.map(f => {
         const liveInfo = onlineUsers.get(f.userId);
         return {
@@ -205,7 +236,8 @@ io.on("connection", (socket) => {
         name: freshUser.name || "Stranger",
         friends: friendsData,
         pendingRequests: freshUser.pendingRequests || [],
-        isVaultEnabled: freshUser.isVaultEnabled || false
+        isVaultEnabled: freshUser.isVaultEnabled || false,
+        friendUnreadCounts
       });
     }
   });
@@ -278,16 +310,31 @@ io.on("connection", (socket) => {
       lastActive: me.lastActive,
       avatarColor: me.avatarColor
     });
+
+    const dmRoom = privateDmRoomId(socket.userId, fromUserId);
+    socket.join(dmRoom);
+    const peerEntry = onlineUsers.get(fromUserId);
+    if (peerEntry) {
+      const peerSocket = io.sockets.sockets.get(peerEntry.socketId);
+      if (peerSocket) peerSocket.join(dmRoom);
+    }
   });
   socket.on("remove_friend", async (data) => {
     const { friendId } = data;
     if (!socket.userId || !friendId) return;
 
+    const dmRoom = privateDmRoomId(socket.userId, friendId);
+    socket.leave(dmRoom);
+    const friendEntry = onlineUsers.get(friendId);
+    if (friendEntry) {
+      const peerSocket = io.sockets.sockets.get(friendEntry.socketId);
+      if (peerSocket) peerSocket.leave(dmRoom);
+    }
+
     await User.findOneAndUpdate({ userId: socket.userId }, { $pull: { friends: friendId } });
     await User.findOneAndUpdate({ userId: friendId }, { $pull: { friends: socket.userId } });
 
     socket.emit("friend_removed", { userId: friendId });
-    const friendEntry = onlineUsers.get(friendId);
     if (friendEntry) {
       io.to(friendEntry.socketId).emit("friend_removed", { userId: socket.userId });
     }

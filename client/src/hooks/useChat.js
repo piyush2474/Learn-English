@@ -162,6 +162,10 @@ const useChat = () => {
       setRoomId(data.roomId);
       setPartnerUserId(data.partnerUserId);
 
+      if (data.roomId.startsWith('private_') && data.partnerUserId) {
+        setUnreadCounts((prev) => ({ ...prev, [data.partnerUserId]: 0 }));
+      }
+
       if (data.roomId.startsWith('private_')) {
         setPartnerName(data.partnerName || 'Friend');
       } else {
@@ -220,7 +224,15 @@ const useChat = () => {
     });
 
     socket.on('receive_message', async (data) => {
-      if (data.roomId !== roomIdRef.current) {
+      const rid = data.roomId;
+      const myId = localStorage.getItem('chat_user_id');
+      if (
+        typeof rid === 'string' &&
+        rid.startsWith('private_') &&
+        rid !== roomIdRef.current &&
+        data.senderId &&
+        data.senderId !== myId
+      ) {
         setUnreadCounts((prev) => ({
           ...prev,
           [data.senderId]: (prev[data.senderId] || 0) + 1
@@ -520,6 +532,9 @@ const useChat = () => {
         setFriendRequests(data.pendingRequests);
       }
       setIsVaultEnabled(!!data.isVaultEnabled);
+      if (data.friendUnreadCounts && typeof data.friendUnreadCounts === 'object') {
+        setUnreadCounts(data.friendUnreadCounts);
+      }
     });
 
     socket.on('friend_added', (data) => {
@@ -535,6 +550,11 @@ const useChat = () => {
 
     socket.on('friend_removed', (data) => {
       setFriends((prev) => prev.filter((f) => f.userId !== data.userId));
+      setUnreadCounts((prev) => {
+        const next = { ...prev };
+        delete next[data.userId];
+        return next;
+      });
     });
 
     socket.on('friend_request_received', (data) => {
