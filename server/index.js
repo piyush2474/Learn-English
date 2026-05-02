@@ -95,6 +95,29 @@ const io = new Server(server, {
 
 const rooms = new Map();
 
+const MESSAGE_LIST_PROJECTION =
+  'roomId senderId messageId message type status timestamp replyTo reactions isEdited';
+
+function normalizeLeanMessage(doc) {
+  const o = { ...doc };
+  o.messageId = o.messageId || (o._id && String(o._id));
+  return o;
+}
+
+async function fetchRecentChatMessages(roomId, limit = 30) {
+  const rows = await Message.find({ roomId })
+    .select(MESSAGE_LIST_PROJECTION)
+    .sort({ timestamp: -1 })
+    .limit(limit)
+    .lean();
+  return rows.reverse().map(normalizeLeanMessage);
+}
+
+function isRoomParticipant(roomsMap, socket, roomId) {
+  const room = roomsMap.get(roomId);
+  return !!(room && socket.userId && room.users.has(socket.userId));
+}
+
 const broadcastStatusUpdate = async (userId, isOnline) => {
   try {
     const user = await User.findOne({ userId });
@@ -337,15 +360,15 @@ io.on("connection", (socket) => {
 
       // Fetch and send chat history for private rooms
       if (roomId.startsWith('private_')) {
-        Message.find({ roomId }).sort({ timestamp: -1 }).limit(30).then(history => {
-          const normalized = history.reverse().map(msg => {
-            const obj = msg.toObject();
-            obj.messageId = obj.messageId || obj._id.toString();
-            return obj;
+        try {
+          const normalized = await fetchRecentChatMessages(roomId, 30);
+          socket.emit("chat_history", {
+            messages: normalized,
+            hasMore: normalized.length >= 30
           });
-          const total = Message.countDocuments({ roomId });
-          socket.emit("chat_history", { messages: normalized, hasMore: history.length >= 30 });
-        });
+        } catch (e) {
+          console.error("chat_history on rejoin:", e);
+        }
       }
     } else {
       socket.emit("rejoin_failed");
@@ -358,35 +381,60 @@ io.on("connection", (socket) => {
     handleMatchmaking(io, socket, rooms);
   });
 
-  socket.on("send_message", async (data) => {
-    const { roomId, message, type, messageId, senderId, replyTo } = data;
-    
-    // Relay message instantly
-    socket.to(roomId).emit("receive_message", data);
+  socket.on("send_message", async (data, ack) => {
+    const reply = (payload) => {
+      if (typeof ack === "function") ack(payload);
+    };
 
-    // Persist if it's a private room (friends)
-    if (roomId.startsWith('private_')) {
-      try {
-        const msgDoc = {
-          roomId,
-          senderId,
-          messageId,
-          message,
-          type: type || 'text',
-          status: 'sent',
-          timestamp: new Date()
-        };
-        if (replyTo) msgDoc.replyTo = replyTo;
-        await new Message(msgDoc).save();
-      } catch (e) {
-        console.error("Failed to save message:", e);
+    try {
+      const { roomId, message, type, messageId, senderId, replyTo } = data || {};
+
+      if (!roomId || message == null || message === "" || !messageId || !senderId) {
+        return reply({ ok: false, error: "invalid_payload" });
       }
+      if (!socket.userId || senderId !== socket.userId) {
+        return reply({ ok: false, error: "sender_mismatch" });
+      }
+      if (!isRoomParticipant(rooms, socket, roomId)) {
+        return reply({ ok: false, error: "not_in_room" });
+      }
+
+      socket.join(roomId);
+      socket.to(roomId).emit("receive_message", data);
+
+      if (roomId.startsWith("private_")) {
+        try {
+          const insertDoc = {
+            roomId,
+            senderId,
+            messageId,
+            message,
+            type: type || "text",
+            status: "sent",
+            timestamp: new Date(),
+            ...(replyTo ? { replyTo } : {})
+          };
+          await Message.updateOne(
+            { roomId, messageId },
+            { $setOnInsert: insertDoc },
+            { upsert: true }
+          );
+        } catch (e) {
+          console.error("Failed to save message:", e);
+          return reply({ ok: false, error: "db_error" });
+        }
+      }
+
+      reply({ ok: true });
+    } catch (e) {
+      console.error("send_message error:", e);
+      reply({ ok: false, error: "internal_error" });
     }
   });
 
   socket.on("load_more_messages", async (data) => {
-    const { roomId, beforeTimestamp, limit = 30 } = data;
-    if (!roomId) return;
+    const { roomId, beforeTimestamp, limit = 30 } = data || {};
+    if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
 
     try {
       const query = { roomId };
@@ -394,14 +442,12 @@ io.on("connection", (socket) => {
         query.timestamp = { $lt: new Date(beforeTimestamp) };
       }
       const messages = await Message.find(query)
+        .select(MESSAGE_LIST_PROJECTION)
         .sort({ timestamp: -1 })
-        .limit(limit);
+        .limit(limit)
+        .lean();
 
-      const normalized = messages.reverse().map(msg => {
-        const obj = msg.toObject();
-        obj.messageId = obj.messageId || obj._id.toString();
-        return obj;
-      });
+      const normalized = messages.reverse().map(normalizeLeanMessage);
 
       socket.emit("more_messages", {
         messages: normalized,
@@ -413,23 +459,21 @@ io.on("connection", (socket) => {
   });
 
   socket.on("clear_chat", async (data) => {
-    const { roomId } = data;
-    if (!roomId) return;
+    const { roomId } = data || {};
+    if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
 
     try {
-      // Delete from DB regardless of room type (if messages exist there)
       await Message.deleteMany({ roomId });
     } catch (e) {
       console.error("Failed to clear chat in DB:", e);
     }
-    
-    // Always notify both parties that chat was cleared
+
     io.to(roomId).emit("chat_cleared", { roomId });
   });
 
   socket.on("mark_messages_seen", async (data) => {
-    const { roomId, userId } = data;
-    if (!roomId) return;
+    const { roomId, userId } = data || {};
+    if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
 
     // Persist seen status in DB if it's a private chat
     if (roomId.startsWith('private_')) {
@@ -448,15 +492,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("start_private_chat", async (data) => {
-    const { friendId } = data;
+    const { friendId } = data || {};
     if (!socket.userId || !friendId) return;
 
     const roomId = `private_${[socket.userId, friendId].sort().join("_")}`;
     const partnerEntry = onlineUsers.get(friendId);
-    
+
     socket.join(roomId);
-    
-    // Initialize room state if not exists
+
     if (!rooms.has(roomId)) {
       rooms.set(roomId, {
         users: new Set([socket.userId, friendId]),
@@ -469,9 +512,9 @@ io.on("connection", (socket) => {
     onlineUsers.set(socket.userId, { socketId: socket.id, status: 'busy', roomId });
     broadcastStatusUpdate(socket.userId, true);
 
-    // If partner is online, bring them into the room
+    let partnerSocket = null;
     if (partnerEntry) {
-      const partnerSocket = io.sockets.sockets.get(partnerEntry.socketId);
+      partnerSocket = io.sockets.sockets.get(partnerEntry.socketId);
       if (partnerSocket) {
         partnerSocket.join(roomId);
         room.sockets.set(friendId, partnerEntry.socketId);
@@ -481,21 +524,34 @@ io.on("connection", (socket) => {
     }
 
     const partner = await User.findOne({ userId: friendId });
-    socket.emit("matched", { 
-      roomId, 
-      isPrivate: true, 
+    const me = await User.findOne({ userId: socket.userId });
+
+    let normalized = [];
+    let hasMore = false;
+    try {
+      normalized = await fetchRecentChatMessages(roomId, 30);
+      hasMore = normalized.length >= 30;
+    } catch (e) {
+      console.error("chat_history private:", e);
+    }
+
+    socket.emit("matched", {
+      roomId,
+      isPrivate: true,
       partnerUserId: friendId,
       partnerName: partner?.name || "Friend"
     });
+    socket.emit("chat_history", { messages: normalized, hasMore });
 
-    Message.find({ roomId }).sort({ timestamp: -1 }).limit(30).then(history => {
-      const normalized = history.reverse().map(msg => {
-        const obj = msg.toObject();
-        obj.messageId = obj.messageId || obj._id.toString();
-        return obj;
+    if (partnerSocket && partnerSocket.connected) {
+      partnerSocket.emit("matched", {
+        roomId,
+        isPrivate: true,
+        partnerUserId: socket.userId,
+        partnerName: me?.name || "Friend"
       });
-      socket.emit("chat_history", { messages: normalized, hasMore: history.length >= 30 });
-    });
+      partnerSocket.emit("chat_history", { messages: normalized, hasMore });
+    }
   });
 
   // --- Vault Handlers ---
@@ -591,13 +647,15 @@ io.on("connection", (socket) => {
 
 
   socket.on("delete_message", (data) => {
-    const { roomId, messageId } = data;
+    const { roomId, messageId } = data || {};
+    if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
     socket.to(roomId).emit("message_deleted", { messageId });
   });
 
   socket.on("edit_message", async (data) => {
-    const { roomId, messageId, newContent } = data;
-    
+    const { roomId, messageId, newContent } = data || {};
+    if (!roomId || !isRoomParticipant(rooms, socket, roomId)) return;
+
     socket.to(roomId).emit("message_edited", { messageId, newContent });
 
     if (roomId.startsWith('private_')) {
@@ -613,11 +671,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("react_to_message", async (data) => {
-    const { roomId, messageId, emoji } = data;
+    const { roomId, messageId, emoji } = data || {};
     if (!socket.userId || !roomId || !messageId || !emoji) return;
+    if (!isRoomParticipant(rooms, socket, roomId)) return;
 
-    // Update local messages state for the room
-    // Broadcast to the room
     io.to(roomId).emit("message_reaction_updated", { messageId, emoji, userId: socket.userId });
 
     // Persist in DB for private chats
@@ -642,8 +699,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("exchange_keys", (data) => {
-    const { roomId, publicKey } = data;
-    socket.to(roomId).emit("exchange_keys", { publicKey });
+    const { roomId, publicKey } = data || {};
+    if (!roomId || !publicKey || !socket.userId) return;
+    if (!isRoomParticipant(rooms, socket, roomId)) return;
+    socket.join(roomId);
+    socket.to(roomId).emit("exchange_keys", { roomId, publicKey });
   });
 
 

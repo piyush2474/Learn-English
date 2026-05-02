@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { socket } from '../socket/socket';
 import useStore from '../store/useStore';
-import { 
-  encryptWithKey, 
-  decryptWithKey, 
-  exportPublicKey, 
-  importPublicKey, 
+import {
+  encryptWithKey,
+  decryptToPlaintext,
+  exportPublicKey,
+  importPublicKey,
   deriveSharedSecret,
   exportSharedKey,
   importSharedKey
@@ -13,40 +13,122 @@ import {
 
 const useChat = () => {
   const {
-    status, setStatus,
-    roomId, setRoomId,
-    myUserId, setMyUserId,
-    myName, setMyName,
-    messages, setMessages,
-    sharedKey, setSharedKey,
-    friends, setFriends,
-    friendRequests, setFriendRequests,
+    status,
+    setStatus,
+    roomId,
+    setRoomId,
+    setMyUserId,
+    setMyName,
+    messages,
+    setMessages,
+    sharedKey,
+    setSharedKey,
+    friends,
+    setFriends,
+    friendRequests,
+    setFriendRequests,
     setIsSocketConnected,
     setUserCount,
     setPartnerName,
     setPartnerUserId,
     setIsPartnerTyping,
     setUnreadCounts,
-    setPartnerMediaStatus,
     setIsVaultEnabled,
     setIsVaultUnlocked,
-    replyingTo, setReplyingTo,
-    hasMoreMessages, setHasMoreMessages,
+    replyingTo,
+    setReplyingTo,
+    hasMoreMessages,
+    setHasMoreMessages,
     resetChat
   } = useStore();
 
   const roomIdRef = useRef(roomId);
   const sharedKeyRef = useRef(sharedKey);
   const myKeyPairRef = useRef(null);
+  const outboundQueueRef = useRef([]);
 
   useEffect(() => {
     roomIdRef.current = roomId;
     sharedKeyRef.current = sharedKey;
   }, [roomId, sharedKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const deliverQueued = async (item) => {
+      const rid = roomIdRef.current;
+      const key = sharedKeyRef.current;
+      if (!rid || !key || cancelled) return;
+
+      let encrypted;
+      try {
+        encrypted = await encryptWithKey(item.text, key);
+      } catch (e) {
+        console.error(e);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.messageId === item.pendingId ? { ...m, status: 'failed' } : m
+          )
+        );
+        return;
+      }
+
+      const messageId = Math.random().toString(36).substr(2, 9);
+      const senderId = localStorage.getItem('chat_user_id');
+      const msgData = {
+        roomId: rid,
+        message: encrypted,
+        type: item.type,
+        messageId,
+        senderId,
+        timestamp: new Date().toISOString(),
+        status: 'sending'
+      };
+      if (item.replyPayload) msgData.replyTo = item.replyPayload;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.messageId === item.pendingId
+            ? {
+                ...m,
+                ...msgData,
+                message: item.text,
+                rawContent: item.text,
+                status: 'sending',
+                messageId
+              }
+            : m
+        )
+      );
+
+      socket.timeout(15000).emit('send_message', msgData, (err, ack) => {
+        if (cancelled) return;
+        const ok = !err && ack && ack.ok;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.messageId === messageId ? { ...m, status: ok ? 'sent' : 'failed' } : m
+          )
+        );
+      });
+    };
+
+    const run = async () => {
+      if (!sharedKey || !roomId) return;
+      while (!cancelled && outboundQueueRef.current.length > 0) {
+        const item = outboundQueueRef.current.shift();
+        await deliverQueued(item);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedKey, roomId, setMessages]);
+
   const initSocket = (myKeyPair) => {
     myKeyPairRef.current = myKeyPair;
-    
+
     if (!socket.connected) {
       socket.connect();
     }
@@ -55,7 +137,7 @@ const useChat = () => {
       setIsSocketConnected(true);
       const id = localStorage.getItem('chat_user_id');
       if (id) {
-        socket.emit("register_user", { userId: id });
+        socket.emit('register_user', { userId: id });
       }
 
       const savedRoomId = sessionStorage.getItem('current_room_id');
@@ -74,22 +156,27 @@ const useChat = () => {
       setStatus('Matched');
       setRoomId(data.roomId);
       setPartnerUserId(data.partnerUserId);
-      
+
       if (data.roomId.startsWith('private_')) {
         setPartnerName(data.partnerName || 'Friend');
       } else {
         setPartnerName(data.partnerName || 'Stranger');
       }
-      
+
       const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
       if (savedKey) {
         try {
           const key = await importSharedKey(savedKey);
           setSharedKey(key);
-        } catch (e) { console.error("Failed to restore shared key", e); }
+        } catch (e) {
+          console.error('Failed to restore shared key', e);
+        }
       }
-      
-      socket.emit('mark_messages_seen', { roomId: data.roomId, userId: localStorage.getItem('chat_user_id') });
+
+      socket.emit('mark_messages_seen', {
+        roomId: data.roomId,
+        userId: localStorage.getItem('chat_user_id')
+      });
 
       if (myKeyPairRef.current) {
         const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
@@ -98,22 +185,24 @@ const useChat = () => {
     });
 
     socket.on('matched', async (data) => {
+      outboundQueueRef.current = [];
       setRoomId(data.roomId);
       setStatus('Matched');
       setMessages([]);
       setPartnerUserId(data.partnerUserId);
       sessionStorage.setItem('current_room_id', data.roomId);
-      
+
       if (data.isPrivate) {
         setPartnerName(data.partnerName || 'Friend');
-        
-        // Try to load cached key for offline messaging
+
         const savedKey = localStorage.getItem(`shared_key_${data.roomId}`);
         if (savedKey) {
           try {
             const key = await importSharedKey(savedKey);
             setSharedKey(key);
-          } catch (e) { console.error("Failed to load cached key", e); }
+          } catch (e) {
+            console.error('Failed to load cached key', e);
+          }
         }
       } else {
         setPartnerName('Stranger');
@@ -127,66 +216,79 @@ const useChat = () => {
 
     socket.on('receive_message', async (data) => {
       if (data.roomId !== roomIdRef.current) {
-        setUnreadCounts(prev => ({
+        setUnreadCounts((prev) => ({
           ...prev,
           [data.senderId]: (prev[data.senderId] || 0) + 1
         }));
       }
 
-      let displayMessage = data.message;
-      let rawContent = data.message;
-      
-      // Try to decrypt with current key, retry a few times if key isn't ready yet
       let key = sharedKeyRef.current;
       if (!key) {
-        // Wait briefly for key exchange to complete
-        for (let i = 0; i < 10; i++) {
-          await new Promise(r => setTimeout(r, 300));
+        for (let i = 0; i < 25; i++) {
+          await new Promise((r) => setTimeout(r, 200));
           key = sharedKeyRef.current;
           if (key) break;
         }
       }
 
+      let displayMessage = data.message;
+      let rawContent = data.message;
+
       if (key) {
-        try {
-          displayMessage = await decryptWithKey(data.message, key);
-          rawContent = displayMessage;
-        } catch (e) {
-          console.warn("Decryption failed:", e);
-          displayMessage = data.message; // Show raw if decryption fails
-        }
+        displayMessage = await decryptToPlaintext(data.message, key);
+        rawContent = displayMessage;
       }
 
-      if (data.type === 'image' && displayMessage.startsWith('data:')) {
+      if (
+        data.type === 'image' &&
+        typeof displayMessage === 'string' &&
+        displayMessage.startsWith('data:')
+      ) {
         try {
           const res = await fetch(displayMessage);
           const blob = await res.blob();
           displayMessage = URL.createObjectURL(blob);
-        } catch (e) { console.error("Blob conversion failed", e); }
+        } catch (e) {
+          console.error('Blob conversion failed', e);
+        }
       }
 
-      setMessages((prev) => [...(Array.isArray(prev) ? prev : []), { 
-        ...data, 
-        message: displayMessage, 
-        rawContent,
-        isEdited: data.isEdited || false 
-      }]);
+      setMessages((prev) => {
+        const arr = Array.isArray(prev) ? prev : [];
+        if (arr.some((m) => m.messageId === data.messageId)) return arr;
+        return [
+          ...arr,
+          {
+            ...data,
+            message: displayMessage,
+            rawContent,
+            isEdited: data.isEdited || false
+          }
+        ];
+      });
       setIsPartnerTyping(false);
-      
+
       if (roomIdRef.current === data.roomId) {
-        socket.emit('mark_messages_seen', { roomId: data.roomId, userId: localStorage.getItem('chat_user_id') });
+        socket.emit('mark_messages_seen', {
+          roomId: data.roomId,
+          userId: localStorage.getItem('chat_user_id')
+        });
       }
     });
 
     socket.on('exchange_keys', async (data) => {
-      if (myKeyPairRef.current && data.publicKey) {
+      if (!myKeyPairRef.current || !data.publicKey || !data.roomId) return;
+      try {
         const partnerPubKey = await importPublicKey(data.publicKey);
-        const shared = await deriveSharedSecret(myKeyPairRef.current.privateKey, partnerPubKey);
+        const shared = await deriveSharedSecret(
+          myKeyPairRef.current.privateKey,
+          partnerPubKey
+        );
         setSharedKey(shared);
-        if (roomIdRef.current) {
-          const exported = await exportSharedKey(shared);
-          localStorage.setItem(`shared_key_${roomIdRef.current}`, exported);
-        }
+        const exported = await exportSharedKey(shared);
+        localStorage.setItem(`shared_key_${data.roomId}`, exported);
+      } catch (e) {
+        console.error('exchange_keys handler', e);
       }
     });
 
@@ -197,76 +299,77 @@ const useChat = () => {
 
       if (!Array.isArray(history)) return;
 
-      // Wait for shared key to be available
       let key = null;
       const currentRoomId = roomIdRef.current;
       const storedKey = localStorage.getItem(`shared_key_${currentRoomId}`);
-      
+
       if (storedKey) {
         try {
           key = await importSharedKey(storedKey);
         } catch (e) {
-          console.error("Failed to import stored key", e);
+          console.error('Failed to import stored key', e);
         }
       }
 
-      // If no stored key, wait for key exchange to complete
       if (!key) {
-        for (let i = 0; i < 15; i++) {
-          await new Promise(r => setTimeout(r, 300));
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 200));
           key = sharedKeyRef.current;
           if (key) break;
         }
       }
 
       if (key) {
-        const decrypted = await Promise.all(history.map(async (msg) => {
-          try {
-            const decryptedMsg = await decryptWithKey(msg.message, key);
-            
-            // Decrypt reply if exists
-            let replyData = msg.replyTo;
-            if (replyData && replyData.message && replyData.type === 'text') {
-              try {
-                const decryptedReply = await decryptWithKey(replyData.message, key);
-                replyData = { ...replyData, message: decryptedReply };
-              } catch (e) {
-                replyData = { ...replyData, message: "[Encrypted Reply]" };
-              }
-            }
+        const decrypted = await Promise.all(
+          history.map(async (msg) => {
+            try {
+              const decryptedMsg = await decryptToPlaintext(msg.message, key);
 
-            return { 
-              ...msg, 
-              message: decryptedMsg, 
-              rawContent: msg.message,
-              messageId: msg.messageId || msg._id,
-              isEdited: msg.isEdited || false,
-              replyTo: (replyData && replyData.message) ? replyData : null,
-              reactions: msg.reactions || []
-            };
-          } catch (e) {
-            return { 
-              ...msg, 
-              message: msg.message, // Show raw if can't decrypt
-              rawContent: msg.message,
-              messageId: msg.messageId || msg._id,
-              isEdited: msg.isEdited || false,
-              reactions: msg.reactions || []
-            };
-          }
-        }));
+              let replyData = msg.replyTo;
+              if (replyData && replyData.message && replyData.type === 'text') {
+                replyData = {
+                  ...replyData,
+                  message: await decryptToPlaintext(replyData.message, key)
+                };
+              }
+
+              return {
+                ...msg,
+                message: decryptedMsg,
+                rawContent: msg.message,
+                messageId: msg.messageId || msg._id,
+                isEdited: msg.isEdited || false,
+                replyTo: replyData && replyData.message ? replyData : null,
+                reactions: msg.reactions || []
+              };
+            } catch (e) {
+              return {
+                ...msg,
+                message: msg.message,
+                rawContent: msg.message,
+                messageId: msg.messageId || msg._id,
+                isEdited: msg.isEdited || false,
+                reactions: msg.reactions || []
+              };
+            }
+          })
+        );
         setMessages(decrypted);
-        socket.emit('mark_messages_seen', { roomId: currentRoomId, userId: localStorage.getItem('chat_user_id') });
+        socket.emit('mark_messages_seen', {
+          roomId: currentRoomId,
+          userId: localStorage.getItem('chat_user_id')
+        });
       } else {
-        // No key available at all, show what we have
-        setMessages(history.map(m => ({ 
-          ...m, 
-          message: "[Encrypted Message]", 
-          rawContent: m.message,
-          messageId: m.messageId || m._id,
-          isEdited: m.isEdited || false,
-          reactions: m.reactions || []
-        })));
+        setMessages(
+          history.map((m) => ({
+            ...m,
+            message: '[Encrypted Message]',
+            rawContent: m.message,
+            messageId: m.messageId || m._id,
+            isEdited: m.isEdited || false,
+            reactions: m.reactions || []
+          }))
+        );
       }
     });
 
@@ -275,59 +378,76 @@ const useChat = () => {
       const hasMore = data.hasMore || false;
       setHasMoreMessages(hasMore);
 
-      if (!sharedKeyRef.current || history.length === 0) {
+      let key = sharedKeyRef.current;
+      if (!key && roomIdRef.current) {
+        const stored = localStorage.getItem(`shared_key_${roomIdRef.current}`);
+        if (stored) {
+          try {
+            key = await importSharedKey(stored);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+
+      if (!key || history.length === 0) {
         if (history.length > 0) {
-          setMessages(prev => [...history.map(m => ({ ...m, message: "[Encrypted]" })), ...prev]);
+          setMessages((prev) => [
+            ...history.map((m) => ({ ...m, message: '[Encrypted]' })),
+            ...prev
+          ]);
         }
         return;
       }
 
-      const decrypted = await Promise.all(history.map(async (msg) => {
-        try {
-          const decryptedMsg = await decryptWithKey(msg.message, sharedKeyRef.current);
-          
-          let replyData = msg.replyTo;
-          if (replyData && replyData.message && replyData.type === 'text') {
-            try {
-              const decryptedReply = await decryptWithKey(replyData.message, sharedKeyRef.current);
-              replyData = { ...replyData, message: decryptedReply };
-            } catch (e) {
-              replyData = { ...replyData, message: "[Encrypted Reply]" };
+      const decrypted = await Promise.all(
+        history.map(async (msg) => {
+          try {
+            const decryptedMsg = await decryptToPlaintext(msg.message, key);
+
+            let replyData = msg.replyTo;
+            if (replyData && replyData.message && replyData.type === 'text') {
+              replyData = {
+                ...replyData,
+                message: await decryptToPlaintext(replyData.message, key)
+              };
             }
+
+            return {
+              ...msg,
+              message: decryptedMsg,
+              rawContent: msg.message,
+              messageId: msg.messageId || msg._id,
+              isEdited: msg.isEdited || false,
+              replyTo: replyData && replyData.message ? replyData : null,
+              reactions: msg.reactions || []
+            };
+          } catch (e) {
+            return { ...msg, message: msg.message, reactions: msg.reactions || [] };
           }
+        })
+      );
 
-          return { 
-            ...msg, 
-            message: decryptedMsg, 
-            rawContent: msg.message,
-            messageId: msg.messageId || msg._id,
-            isEdited: msg.isEdited || false,
-            replyTo: (replyData && replyData.message) ? replyData : null,
-            reactions: msg.reactions || []
-          };
-        } catch (e) {
-          return { ...msg, message: msg.message, reactions: msg.reactions || [] };
-        }
-      }));
-
-      setMessages(prev => [...decrypted, ...prev]);
+      setMessages((prev) => [...decrypted, ...prev]);
     });
 
     socket.on('message_reaction_updated', (data) => {
       const { messageId, emoji, userId } = data;
-      setMessages(prev => prev.map(m => {
-        if (m.messageId === messageId) {
-          const reactions = [...(m.reactions || [])];
-          const idx = reactions.findIndex(r => r.emoji === emoji && r.userId === userId);
-          if (idx > -1) {
-            reactions.splice(idx, 1);
-          } else {
-            reactions.push({ emoji, userId });
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.messageId === messageId) {
+            const reactions = [...(m.reactions || [])];
+            const idx = reactions.findIndex((r) => r.emoji === emoji && r.userId === userId);
+            if (idx > -1) {
+              reactions.splice(idx, 1);
+            } else {
+              reactions.push({ emoji, userId });
+            }
+            return { ...m, reactions };
           }
-          return { ...m, reactions };
-        }
-        return m;
-      }));
+          return m;
+        })
+      );
     });
 
     socket.on('user_count', (count) => setUserCount(count));
@@ -336,27 +456,54 @@ const useChat = () => {
       if (roomIdRef.current?.startsWith('private_')) {
         setMessages((prev) => [
           ...prev,
-          { message: 'Partner is offline. You can still send messages.', senderId: 'system', timestamp: new Date().toISOString() }
+          {
+            message: 'Partner is offline. You can still send messages.',
+            senderId: 'system',
+            timestamp: new Date().toISOString()
+          }
         ]);
       } else {
         setStatus('Disconnected');
         setMessages((prev) => [
           ...prev,
-          { message: 'Stranger has disconnected.', senderId: 'system', timestamp: new Date().toISOString() }
+          {
+            message: 'Stranger has disconnected.',
+            senderId: 'system',
+            timestamp: new Date().toISOString()
+          }
         ]);
       }
     });
 
-    socket.on('partner_rejoined', () => {
+    socket.on('partner_rejoined', async () => {
       setStatus('Matched');
+      if (myKeyPairRef.current && roomIdRef.current) {
+        try {
+          const pubKeyBase64 = await exportPublicKey(myKeyPairRef.current.publicKey);
+          socket.emit('exchange_keys', {
+            roomId: roomIdRef.current,
+            publicKey: pubKeyBase64
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
     });
 
     socket.on('friend_status_update', (data) => {
-      setFriends(prev => prev.map(f => 
-        f.userId === data.userId 
-          ? { ...f, isOnline: data.isOnline, activity: data.activity, roomId: data.roomId, lastActive: data.lastActive } 
-          : f
-      ));
+      setFriends((prev) =>
+        prev.map((f) =>
+          f.userId === data.userId
+            ? {
+                ...f,
+                isOnline: data.isOnline,
+                activity: data.activity,
+                roomId: data.roomId,
+                lastActive: data.lastActive
+              }
+            : f
+        )
+      );
     });
 
     socket.on('init_data', (data) => {
@@ -371,31 +518,36 @@ const useChat = () => {
     });
 
     socket.on('friend_added', (data) => {
-      console.log("Friend added event received:", data);
-      setFriends(prev => {
+      setFriends((prev) => {
         const currentFriends = Array.isArray(prev) ? prev : [];
-        if (currentFriends.some(f => f.userId === data.userId)) return currentFriends;
+        if (currentFriends.some((f) => f.userId === data.userId)) return currentFriends;
         return [...currentFriends, data];
       });
-      setFriendRequests(prev => (Array.isArray(prev) ? prev : []).filter(req => req.from !== data.userId));
+      setFriendRequests((prev) =>
+        (Array.isArray(prev) ? prev : []).filter((req) => req.from !== data.userId)
+      );
     });
 
     socket.on('friend_removed', (data) => {
-      setFriends(prev => prev.filter(f => f.userId !== data.userId));
+      setFriends((prev) => prev.filter((f) => f.userId !== data.userId));
     });
 
     socket.on('friend_request_received', (data) => {
-      console.log("Friend request received:", data);
-      setFriendRequests(prev => {
+      setFriendRequests((prev) => {
         const current = Array.isArray(prev) ? prev : [];
-        if (current.some(r => r.from === data.from)) return current;
+        if (current.some((r) => r.from === data.from)) return current;
         return [...current, data];
       });
     });
 
     socket.on('messages_marked_seen', (data) => {
       if (data.roomId === roomIdRef.current) {
-        setMessages(prev => prev.map(m => ({ ...m, status: 'seen' })));
+        const myId = localStorage.getItem('chat_user_id');
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.senderId === myId && m.status === 'sent' ? { ...m, status: 'seen' } : m
+          )
+        );
       }
     });
 
@@ -407,26 +559,24 @@ const useChat = () => {
 
     socket.on('message_edited', async (data) => {
       const { messageId, newContent } = data;
-      
+
       let displayMessage = newContent;
       if (sharedKeyRef.current) {
-        try {
-          displayMessage = await decryptWithKey(newContent, sharedKeyRef.current);
-        } catch (e) {
-          displayMessage = "[Encrypted Message]";
-        }
+        displayMessage = await decryptToPlaintext(newContent, sharedKeyRef.current);
       }
 
-      setMessages(prev => prev.map(m => 
-        m.messageId === messageId 
-          ? { ...m, message: displayMessage, rawContent: newContent, isEdited: true } 
-          : m
-      ));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.messageId === messageId
+            ? { ...m, message: displayMessage, rawContent: newContent, isEdited: true }
+            : m
+        )
+      );
     });
 
     socket.on('message_deleted', (data) => {
       const { messageId } = data;
-      setMessages(prev => prev.filter(m => m.messageId !== messageId));
+      setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
     });
 
     return () => {
@@ -456,30 +606,19 @@ const useChat = () => {
   };
 
   const findPartner = () => {
+    outboundQueueRef.current = [];
     resetChat();
     setStatus('Waiting');
     socket.emit('find_partner', { userId: localStorage.getItem('chat_user_id') });
   };
 
   const sendMessage = async (text, type = 'text') => {
-    if (!text.trim() || !roomId || !sharedKey) return;
+    if (!text.trim() || !roomId) return;
 
-    const messageId = Math.random().toString(36).substr(2, 9);
-    const encrypted = await encryptWithKey(text, sharedKey);
     const senderId = localStorage.getItem('chat_user_id');
-
-    const msgData = {
-      roomId,
-      message: encrypted,
-      type,
-      messageId,
-      senderId,
-      timestamp: new Date().toISOString(),
-      status: 'sent'
-    };
-
+    let replyPayload = null;
     if (replyingTo) {
-      msgData.replyTo = {
+      replyPayload = {
         messageId: replyingTo.messageId,
         message: replyingTo.rawContent,
         senderId: replyingTo.senderId,
@@ -488,8 +627,60 @@ const useChat = () => {
       setReplyingTo(null);
     }
 
-    socket.emit('send_message', msgData);
+    if (!sharedKey) {
+      const pendingId = `q_${Math.random().toString(36).slice(2)}`;
+      outboundQueueRef.current.push({
+        pendingId,
+        text,
+        type,
+        replyPayload
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          roomId,
+          message: text,
+          rawContent: text,
+          type,
+          messageId: pendingId,
+          senderId,
+          timestamp: new Date().toISOString(),
+          status: 'queued'
+        }
+      ]);
+      return;
+    }
+
+    let encrypted;
+    try {
+      encrypted = await encryptWithKey(text, sharedKey);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+
+    const messageId = Math.random().toString(36).substr(2, 9);
+    const msgData = {
+      roomId,
+      message: encrypted,
+      type,
+      messageId,
+      senderId,
+      timestamp: new Date().toISOString(),
+      status: 'sending'
+    };
+    if (replyPayload) msgData.replyTo = replyPayload;
+
     setMessages((prev) => [...prev, { ...msgData, message: text, rawContent: text }]);
+
+    socket.timeout(15000).emit('send_message', msgData, (err, ack) => {
+      const ok = !err && ack && ack.ok;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.messageId === messageId ? { ...m, status: ok ? 'sent' : 'failed' } : m
+        )
+      );
+    });
   };
 
   const loadMoreMessages = () => {
@@ -506,17 +697,27 @@ const useChat = () => {
   const editMessage = async (messageId, newText) => {
     if (!newText.trim() || !roomId || !sharedKey) return;
 
-    const encrypted = await encryptWithKey(newText, sharedKey);
+    let encrypted;
+    try {
+      encrypted = await encryptWithKey(newText, sharedKey);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+
     socket.emit('edit_message', { roomId, messageId, newContent: encrypted });
 
-    setMessages(prev => prev.map(m => 
-      m.messageId === messageId 
-        ? { ...m, message: newText, rawContent: newText, isEdited: true } 
-        : m
-    ));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.messageId === messageId
+          ? { ...m, message: newText, rawContent: newText, isEdited: true }
+          : m
+      )
+    );
   };
 
   const leaveChat = () => {
+    outboundQueueRef.current = [];
     socket.emit('leave_chat');
     resetChat();
     setStatus('Idle');

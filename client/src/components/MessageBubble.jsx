@@ -252,8 +252,18 @@ const MessageBubble = ({
               {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
             {isSelf && (
-              <span className="ml-1">
-                {status === 'seen' ? <CheckCheck className="w-3.5 h-3.5 text-blue-400" /> : <Check className="w-3.5 h-3.5 text-white/40" />}
+              <span className="ml-1 flex items-center">
+                {status === 'failed' ? (
+                  <span className="text-[9px] font-bold text-red-300 uppercase tracking-tight">Failed</span>
+                ) : status === 'queued' ? (
+                  <span className="text-[9px] font-semibold text-white/50 uppercase tracking-tight">Queued</span>
+                ) : status === 'sending' ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+                ) : status === 'seen' ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 text-white/40" />
+                )}
               </span>
             )}
           </div>

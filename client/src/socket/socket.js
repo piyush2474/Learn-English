@@ -5,7 +5,8 @@ const URL = import.meta.env.VITE_BACKEND_URL || "https://learn-english-backend.o
 
 export const socket = io(URL, {
   autoConnect: false,
-  transports: ["websocket"],
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  transports: ["websocket", "polling"],
+  reconnectionAttempts: 8,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 10000
 });

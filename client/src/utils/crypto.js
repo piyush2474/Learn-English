@@ -21,9 +21,20 @@ export const importKeyPair = async (jsonString) => {
   return { publicKey: pub, privateKey: priv };
 };
 
+function uint8ToBinaryChunked(bytes) {
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const sub = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, sub);
+  }
+  return binary;
+}
+
 export const exportPublicKey = async (key) => {
   const exported = await window.crypto.subtle.exportKey("spki", key);
-  return window.btoa(String.fromCharCode.apply(null, new Uint8Array(exported)));
+  const buf = new Uint8Array(exported);
+  return window.btoa(uint8ToBinaryChunked(buf));
 };
 
 export const importPublicKey = async (base64Key) => {
@@ -44,7 +55,7 @@ export const deriveSharedSecret = async (privateKey, publicKey) => {
     { name: "ECDH", public: publicKey },
     privateKey,
     { name: "AES-GCM", length: 256 },
-    true, // Must be true to export it later
+    true,
     ["encrypt", "decrypt"]
   );
 };
@@ -66,32 +77,35 @@ export const importSharedKey = async (jsonString) => {
 };
 
 // --- Encryption / Decryption using Derived Shared Key ---
+// decryptWithKey returns { ok: true, plaintext } | { ok: false }
+// encryptWithKey throws on failure (never sends plaintext by mistake)
 
 export const encryptWithKey = async (text, cryptoKey) => {
-  try {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      data
-    );
+  if (cryptoKey == null) throw new Error("Missing encryption key");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    cryptoKey,
+    data
+  );
 
-    const combined = new Uint8Array(iv.length + encrypted.byteLength);
-    combined.set(iv);
-    combined.set(new Uint8Array(encrypted), iv.length);
-    const binary = String.fromCharCode.apply(null, combined);
-    return "zk-enc:" + window.btoa(binary);
-  } catch (err) {
-    console.error("Encryption failed:", err);
-    return text;
-  }
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  const binary = uint8ToBinaryChunked(combined);
+  return "zk-enc:" + window.btoa(binary);
 };
 
 export const decryptWithKey = async (encryptedBase64, cryptoKey) => {
-  if (!encryptedBase64 || !encryptedBase64.startsWith("zk-enc:")) return encryptedBase64;
-  
+  if (!encryptedBase64 || typeof encryptedBase64 !== "string") {
+    return { ok: false, error: "empty" };
+  }
+  if (!encryptedBase64.startsWith("zk-enc:")) {
+    return { ok: true, plaintext: encryptedBase64 };
+  }
+
   try {
     const decoder = new TextDecoder();
     const binary = window.atob(encryptedBase64.replace("zk-enc:", ""));
@@ -99,19 +113,25 @@ export const decryptWithKey = async (encryptedBase64, cryptoKey) => {
     for (let i = 0; i < binary.length; i++) combined[i] = binary.charCodeAt(i);
 
     const iv = combined.slice(0, 12);
-    const data = combined.slice(12);
+    const ciphertext = combined.slice(12);
 
     const decrypted = await window.crypto.subtle.decrypt(
       { name: "AES-GCM", iv },
       cryptoKey,
-      data
+      ciphertext
     );
 
-    return decoder.decode(decrypted);
+    return { ok: true, plaintext: decoder.decode(decrypted) };
   } catch (err) {
     console.error("Decryption failed:", err);
-    return "[Encrypted Content]";
+    return { ok: false, error: "decrypt_failed" };
   }
+};
+
+/** Convenience for displaying ciphertext or plaintext without branching at call sites */
+export const decryptToPlaintext = async (encryptedBase64, cryptoKey) => {
+  const r = await decryptWithKey(encryptedBase64, cryptoKey);
+  return r.ok ? r.plaintext : "[Unable to decrypt]";
 };
 
 // Legacy support (to be replaced by ECDH flow)
