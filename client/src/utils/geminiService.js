@@ -13,7 +13,7 @@ export async function translateToEnglish(text) {
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -30,7 +30,9 @@ export async function translateToEnglish(text) {
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error("Gemini API Error Detail:", errorData);
+      throw new Error(`Gemini API error: ${response.status} ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
