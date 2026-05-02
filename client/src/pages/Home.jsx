@@ -33,6 +33,7 @@ import {
   deleteChatMedia
 } from '../utils/mediaUpload';
 import { optimizeImage } from '../utils/imageOptimizer';
+import { translateToEnglish } from '../utils/geminiService';
 
 const Home = () => {
   // --- Zustand Store ---
@@ -107,21 +108,14 @@ const Home = () => {
   const handleMasterEnglish = async () => {
     if (!inputText.trim()) return;
     setIsTranslating(true);
-    
-    // Simulate "Magic" feel
-    await new Promise(r => setTimeout(r, 800));
-    
-    // Smart English Master logic
-    // Note: You can replace this with a real AI call to OpenAI/Gemini later
-    const mastered = inputText
-      .trim()
-      .replace(/^([a-z])/, (m) => m.toUpperCase()) // Capitalize first letter
-      .replace(/\s+i\s+/g, ' I ') // Fix lowercase "i"
-      .replace(/\s+i'([a-z]+)/g, " I'$1") // Fix "i'm"
-      .replace(/([^.!?])$/, '$1.'); // Add period if missing
-      
-    setInputText(mastered);
-    setIsTranslating(false);
+    try {
+      const mastered = await translateToEnglish(inputText);
+      setInputText(mastered);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   const dragStartY = useRef(0);
