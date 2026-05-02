@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react';
 import { socket } from '../socket/socket';
 import useStore from '../store/useStore';
 import {
+  buildReplyToPayload,
+  normalizeReplyToFromServer,
+  hasRenderableReply
+} from '../utils/replyPreview';
+import {
   encryptWithKey,
   decryptToPlaintext,
   exportPublicKey,
@@ -253,6 +258,11 @@ const useChat = () => {
         }
       }
 
+      let replyToNorm = null;
+      if (data.replyTo) {
+        replyToNorm = await normalizeReplyToFromServer(data.replyTo, key || null);
+      }
+
       setMessages((prev) => {
         const arr = Array.isArray(prev) ? prev : [];
         if (arr.some((m) => m.messageId === data.messageId)) return arr;
@@ -262,7 +272,8 @@ const useChat = () => {
             ...data,
             message: displayMessage,
             rawContent,
-            isEdited: data.isEdited || false
+            isEdited: data.isEdited || false,
+            replyTo: hasRenderableReply(replyToNorm) ? replyToNorm : null
           }
         ];
       });
@@ -325,12 +336,9 @@ const useChat = () => {
             try {
               const decryptedMsg = await decryptToPlaintext(msg.message, key);
 
-              let replyData = msg.replyTo;
-              if (replyData && replyData.message && replyData.type === 'text') {
-                replyData = {
-                  ...replyData,
-                  message: await decryptToPlaintext(replyData.message, key)
-                };
+              let replyData = null;
+              if (msg.replyTo) {
+                replyData = await normalizeReplyToFromServer(msg.replyTo, key);
               }
 
               return {
@@ -339,7 +347,7 @@ const useChat = () => {
                 rawContent: msg.message,
                 messageId: msg.messageId || msg._id,
                 isEdited: msg.isEdited || false,
-                replyTo: replyData && replyData.message ? replyData : null,
+                replyTo: hasRenderableReply(replyData) ? replyData : null,
                 reactions: msg.reactions || []
               };
             } catch (e) {
@@ -405,12 +413,9 @@ const useChat = () => {
           try {
             const decryptedMsg = await decryptToPlaintext(msg.message, key);
 
-            let replyData = msg.replyTo;
-            if (replyData && replyData.message && replyData.type === 'text') {
-              replyData = {
-                ...replyData,
-                message: await decryptToPlaintext(replyData.message, key)
-              };
+            let replyData = null;
+            if (msg.replyTo) {
+              replyData = await normalizeReplyToFromServer(msg.replyTo, key);
             }
 
             return {
@@ -419,7 +424,7 @@ const useChat = () => {
               rawContent: msg.message,
               messageId: msg.messageId || msg._id,
               isEdited: msg.isEdited || false,
-              replyTo: replyData && replyData.message ? replyData : null,
+              replyTo: hasRenderableReply(replyData) ? replyData : null,
               reactions: msg.reactions || []
             };
           } catch (e) {
@@ -618,12 +623,7 @@ const useChat = () => {
     const senderId = localStorage.getItem('chat_user_id');
     let replyPayload = null;
     if (replyingTo) {
-      replyPayload = {
-        messageId: replyingTo.messageId,
-        message: replyingTo.rawContent,
-        senderId: replyingTo.senderId,
-        type: replyingTo.type
-      };
+      replyPayload = buildReplyToPayload(replyingTo);
       setReplyingTo(null);
     }
 
@@ -645,7 +645,8 @@ const useChat = () => {
           messageId: pendingId,
           senderId,
           timestamp: new Date().toISOString(),
-          status: 'queued'
+          status: 'queued',
+          ...(replyPayload && hasRenderableReply(replyPayload) ? { replyTo: replyPayload } : {})
         }
       ]);
       return;

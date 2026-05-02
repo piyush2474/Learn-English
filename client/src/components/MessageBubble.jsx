@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, X, Maximize2, Check, CheckCheck, Pencil, Reply } from 'lucide-react';
+import { hasRenderableReply, getReplySnippetDisplay } from '../utils/replyPreview';
 
 const SWIPE_THRESHOLD_PX = 52;
 const LONG_PRESS_MS = 600;
@@ -134,21 +135,26 @@ const MessageBubble = ({
           </span>
         )}
 
-        {replyTo && replyTo.message && (
+        {hasRenderableReply(replyTo) && (
           <div
             className={`
-            mb-[-8px] px-3 pt-2 pb-4 rounded-t-xl text-[12px] flex items-center gap-2 border-x border-t border-white/5
-            ${isSelf ? 'bg-primary/30 mr-2' : 'bg-white/5 ml-2'}
+            mb-[-8px] w-full max-w-full min-w-0 mr-2 ml-2 rounded-t-2xl border border-b-0 overflow-hidden
+            ${isSelf
+              ? 'bg-black/25 border-white/15'
+              : 'bg-black/25 border-white/10'
+            }
           `}
           >
-            <div className="w-0.5 h-6 bg-primary rounded-full" />
-            <div className="flex-1 min-w-0 opacity-60">
-              <p className="font-bold uppercase tracking-tighter text-[10px]">
-                {replyTo.senderId === localStorage.getItem('chat_user_id') ? 'You' : partnerName}
-              </p>
-              <p className="truncate italic">
-                {replyTo.type === 'image' ? 'Photo' : replyTo.message}
-              </p>
+            <div className="flex gap-2.5 px-3 py-2 min-w-0 items-stretch">
+              <div className={`w-[3px] shrink-0 rounded-full self-stretch ${isSelf ? 'bg-white/70' : 'bg-primary'}`} />
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className={`text-[10px] font-bold uppercase tracking-wider truncate ${isSelf ? 'text-white/80' : 'text-primary/90'}`}>
+                  {replyTo.senderId === localStorage.getItem('chat_user_id') ? 'You' : partnerName || 'Contact'}
+                </p>
+                <p className={`text-[12px] leading-snug truncate mt-0.5 ${isSelf ? 'text-white/85' : 'text-gray-300'}`}>
+                  {getReplySnippetDisplay(replyTo, 120)}
+                </p>
+              </div>
             </div>
           </div>
         )}

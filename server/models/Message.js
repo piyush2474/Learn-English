@@ -33,6 +33,8 @@ const messageSchema = new mongoose.Schema({
   },
   replyTo: {
     messageId: String,
+    /** Plaintext one-line preview for UI (preferred over legacy encrypted `message`) */
+    preview: String,
     message: String,
     senderId: String,
     type: { type: String, default: 'text' }

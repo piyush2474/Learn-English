@@ -1,5 +1,6 @@
 import React, { useRef, forwardRef } from 'react';
 import { Plus, Send, X, Pencil } from 'lucide-react';
+import { getReplySnippetDisplay } from '../../utils/replyPreview';
 
 function truncatePreview(text, max = 72) {
   if (text == null || typeof text !== 'string') return '';
@@ -37,14 +38,10 @@ const ChatInput = forwardRef(function ChatInput(
       ? 'You'
       : partnerName || 'Contact'
     : '';
-  const replySnippet = replyingTo
-    ? replyingTo.type === 'image'
-      ? 'Photo'
-      : truncatePreview(replyingTo.message, 80)
-    : '';
+  const replySnippet = replyingTo ? getReplySnippetDisplay(replyingTo, 96) : '';
 
   return (
-    <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pb-6 pt-2 z-20">
+    <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pb-6 pt-2 z-30">
       {isEditing && (
         <div className="mb-2 mx-4 flex items-center gap-3 bg-amber-500/10 backdrop-blur-xl border border-amber-500/30 p-3 rounded-2xl animate-in slide-in-from-bottom-2 duration-300">
           <div className="w-1 h-8 bg-amber-400 rounded-full" />
@@ -69,16 +66,14 @@ const ChatInput = forwardRef(function ChatInput(
       )}
 
       {!isEditing && replyingTo && (
-        <div className="mb-2 mx-4 flex items-center gap-3 bg-[#1a1c2e]/90 backdrop-blur-xl border border-white/10 p-3 rounded-2xl animate-in slide-in-from-bottom-2 duration-300">
-          <div className="w-1 h-8 bg-primary rounded-full" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-primary uppercase tracking-wider">
+        <div className="mb-2 mx-4 flex items-center gap-3 bg-[#1a1c2e]/95 backdrop-blur-xl border border-white/10 p-3 rounded-2xl shadow-lg shadow-black/20 animate-in slide-in-from-bottom-2 duration-300 min-w-0">
+          <div className="w-1 shrink-0 self-stretch min-h-[2.5rem] rounded-full bg-primary/90" />
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <p className="text-[11px] font-bold text-primary uppercase tracking-wider truncate">
               Replying to {replyName}
             </p>
-            <p className="text-[13px] text-gray-300 truncate">
-              <span className="text-gray-500">&quot;</span>
+            <p className="text-[13px] text-gray-300 truncate mt-0.5" title={replySnippet}>
               {replySnippet}
-              <span className="text-gray-500">&quot;</span>
             </p>
           </div>
           <button

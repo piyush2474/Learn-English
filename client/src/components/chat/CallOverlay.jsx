@@ -1,5 +1,6 @@
 import React from 'react';
 import { VideoOff, MicOff, Mic, Video, RefreshCw, MessageCircle, Trash2, PhoneOff, ArrowUp, X } from 'lucide-react';
+import { getReplySnippetDisplay } from '../../utils/replyPreview';
 
 function snippet(text, max = 56) {
   if (!text || typeof text !== 'string') return '';
@@ -135,10 +136,9 @@ const CallOverlay = ({
                 </div>
               )}
               {!editingMessage && replyingTo && (
-                <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[12px] text-gray-200">
-                  <span className="flex-1 truncate">
-                    To {replyingTo.senderId === myUserId ? 'You' : partnerName}: “
-                    {replyingTo.type === 'image' ? 'Photo' : snippet(replyingTo.message, 48)}”
+                <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[12px] text-gray-200 min-w-0">
+                  <span className="flex-1 truncate min-w-0" title={getReplySnippetDisplay(replyingTo, 160)}>
+                    Replying to {replyingTo.senderId === myUserId ? 'You' : partnerName}: {getReplySnippetDisplay(replyingTo, 72)}
                   </span>
                   <button
                     type="button"
