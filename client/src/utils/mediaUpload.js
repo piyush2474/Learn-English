@@ -70,7 +70,7 @@ export function validateChatMediaFile(file) {
 /**
  * @returns {{ publicUrl: string, path: string }}
  */
-export async function uploadChatMedia(file, { roomId, messageId }) {
+export async function uploadChatMedia(file, { roomId, messageId }, onProgress) {
   const supabase = getSupabase();
   if (!supabase) {
     throw new Error('Supabase is not configured (set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY)');
@@ -89,7 +89,13 @@ export async function uploadChatMedia(file, { roomId, messageId }) {
     .upload(path, file, {
       cacheControl: '3600',
       upsert: true,
-      contentType: file.type || undefined
+      contentType: file.type || undefined,
+      onUploadProgress: (evt) => {
+        if (onProgress && evt.total) {
+          const percent = Math.round((evt.loaded / evt.total) * 100);
+          onProgress(percent);
+        }
+      }
     });
 
   if (error) throw error;

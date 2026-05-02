@@ -23,6 +23,7 @@ const MessageBubble = ({
   status,
   onZoom,
   isUploading,
+  uploadProgress,
   isEdited: initialIsEdited
 }) => {
   const [showMobileActions, setShowMobileActions] = useState(false);
@@ -308,8 +309,35 @@ const MessageBubble = ({
                       )}
                     </>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                      <div className="relative w-8 h-8">
+                        <svg className="w-full h-full -rotate-90">
+                          <circle
+                            cx="16"
+                            cy="16"
+                            r="14"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            fill="transparent"
+                            className="text-white/10"
+                          />
+                          <circle
+                            cx="16"
+                            cy="16"
+                            r="14"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            fill="transparent"
+                            strokeDasharray={88}
+                            strokeDashoffset={88 - (88 * (uploadProgress || 0)) / 100}
+                            strokeLinecap="round"
+                            className="text-white transition-all duration-300"
+                          />
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black">
+                          {uploadProgress || 0}%
+                        </span>
+                      </div>
                     </div>
                   )}
                   {message && !isUploading && mediaStatus === true && (
@@ -320,11 +348,11 @@ const MessageBubble = ({
                 </div>
                 <div className="flex flex-col flex-1 min-w-0 py-2">
                   <span className="text-[13px] font-bold text-white/90 truncate uppercase tracking-wider">
-                    {isUploading ? 'Sending...' : mediaStatus === false ? 'Error' : isGif ? 'GIF' : 'Photo'}
+                    {isUploading ? `Sending ${uploadProgress || 0}%` : mediaStatus === false ? 'Error' : isGif ? 'GIF' : 'Photo'}
                   </span>
                   <span className="text-[10px] text-white/40 font-medium truncate">
                     {isUploading
-                      ? 'Uploading…'
+                      ? uploadProgress === 100 ? 'Finalizing…' : 'Uploading…'
                       : mediaStatus === false
                         ? 'Tap retry by reopening chat'
                         : isGif

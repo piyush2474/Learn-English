@@ -32,6 +32,7 @@ import {
   validateChatMediaFile,
   deleteChatMedia
 } from '../utils/mediaUpload';
+import { optimizeImage } from '../utils/imageOptimizer';
 
 const Home = () => {
   // --- Zustand Store ---
@@ -419,6 +420,12 @@ const Home = () => {
           ? URL.createObjectURL(file)
           : '';
 
+      // Optimization step
+      let fileToUpload = file;
+      if (!isVideo && file.type.startsWith('image/') && file.type !== 'image/gif') {
+        fileToUpload = await optimizeImage(file);
+      }
+
       setMessages((prev) => [
         ...prev,
         {
@@ -428,12 +435,17 @@ const Home = () => {
           timestamp: new Date().toISOString(),
           type: isVideo ? 'video' : 'image',
           message: localPreview,
-          isUploading: true
+          isUploading: true,
+          uploadProgress: 0
         }
       ]);
 
       try {
-        const { publicUrl } = await uploadChatMedia(file, { roomId, messageId });
+        const { publicUrl } = await uploadChatMedia(fileToUpload, { roomId, messageId }, (percent) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.messageId === messageId ? { ...m, uploadProgress: percent } : m))
+          );
+        });
         if (localPreview) URL.revokeObjectURL(localPreview);
         sendMessage(publicUrl, isVideo ? 'video' : 'image', { replaceMessageId: messageId });
       } catch (err) {
