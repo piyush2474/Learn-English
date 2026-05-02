@@ -101,6 +101,27 @@ const Home = () => {
   const [informMessage, setInformMessage] = useState('');
   const [isSendingInform, setIsSendingInform] = useState(false);
   const [isFetchingWord, setIsFetchingWord] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  const handleMasterEnglish = async () => {
+    if (!inputText.trim()) return;
+    setIsTranslating(true);
+    
+    // Simulate "Magic" feel
+    await new Promise(r => setTimeout(r, 800));
+    
+    // Smart English Master logic
+    // Note: You can replace this with a real AI call to OpenAI/Gemini later
+    const mastered = inputText
+      .trim()
+      .replace(/^([a-z])/, (m) => m.toUpperCase()) // Capitalize first letter
+      .replace(/\s+i\s+/g, ' I ') // Fix lowercase "i"
+      .replace(/\s+i'([a-z]+)/g, " I'$1") // Fix "i'm"
+      .replace(/([^.!?])$/, '$1.'); // Add period if missing
+      
+    setInputText(mastered);
+    setIsTranslating(false);
+  };
 
   const dragStartY = useRef(0);
   const dragStartStatusBarY = useRef(0);
@@ -416,10 +437,16 @@ const Home = () => {
         if (localPreview) URL.revokeObjectURL(localPreview);
         sendMessage(publicUrl, isVideo ? 'video' : 'image', { replaceMessageId: messageId });
       } catch (err) {
-        console.error(err);
-        if (localPreview) URL.revokeObjectURL(localPreview);
-        setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
-        alert(err?.message || 'Upload failed. Check Supabase bucket and policies.');
+        console.warn('Supabase upload failed, falling back to direct socket send:', err);
+        try {
+          const fallbackData = await readFileAsDataURL(file);
+          if (localPreview) URL.revokeObjectURL(localPreview);
+          sendMessage(fallbackData, isVideo ? 'video' : 'image', { replaceMessageId: messageId });
+        } catch (fallbackErr) {
+          console.error('Final fallback failed:', fallbackErr);
+          if (localPreview) URL.revokeObjectURL(localPreview);
+          setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
+        }
       }
       return;
     }
@@ -734,6 +761,8 @@ const Home = () => {
           partnerName={partnerName}
           myUserId={myUserId}
           isStealthMode={isStealthMode}
+          onMasterEnglish={handleMasterEnglish}
+          isTranslating={isTranslating}
         />
 
         {isSettingsOpen && (

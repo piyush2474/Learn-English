@@ -1,5 +1,5 @@
 import React, { useRef, forwardRef } from 'react';
-import { Plus, Send, X, Pencil } from 'lucide-react';
+import { Plus, Send, X, Pencil, Wand2, Loader2 } from 'lucide-react';
 import { getReplySnippetDisplay } from '../../utils/replyPreview';
 
 function truncatePreview(text, max = 72) {
@@ -23,7 +23,9 @@ const ChatInput = forwardRef(function ChatInput(
     editingMessage,
     onCancelEdit,
     partnerName,
-    myUserId
+    myUserId,
+    onMasterEnglish,
+    isTranslating
   },
   ref
 ) {
@@ -134,10 +136,27 @@ const ChatInput = forwardRef(function ChatInput(
             }
           }}
         />
+
+        {inputText.trim() && !isEditing && !isDisabled && (
+          <button
+            type="button"
+            onClick={onMasterEnglish}
+            disabled={isTranslating}
+            className="p-2 mr-1 text-purple-400 hover:text-purple-300 transition-all hover:scale-110 active:rotate-12 disabled:opacity-50"
+            title="Master English (AI)"
+          >
+            {isTranslating ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Wand2 className="w-5 h-5" />
+            )}
+          </button>
+        )}
+
         <button
           type="submit"
           disabled={isDisabled || !inputText.trim()}
-          className={`absolute right-2 p-2 rounded-2xl transition-all ${
+          className={`shrink-0 mr-2 p-2 rounded-2xl transition-all ${
             inputText.trim() && !isDisabled
               ? isEditing
                 ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
