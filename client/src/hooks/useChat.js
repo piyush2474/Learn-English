@@ -226,10 +226,13 @@ const useChat = () => {
     socket.on('receive_message', async (data) => {
       const rid = data.roomId;
       const myId = localStorage.getItem('chat_user_id');
+      const viewingThisRoom = rid === roomIdRef.current;
+
+      // Friend DM badge while focusing another chat (e.g. random match) — do not leak into current thread UI.
       if (
         typeof rid === 'string' &&
         rid.startsWith('private_') &&
-        rid !== roomIdRef.current &&
+        !viewingThisRoom &&
         data.senderId &&
         data.senderId !== myId
       ) {
@@ -238,6 +241,8 @@ const useChat = () => {
           [data.senderId]: (prev[data.senderId] || 0) + 1
         }));
       }
+
+      if (!viewingThisRoom) return;
 
       let key = sharedKeyRef.current;
       if (!key) {
@@ -291,12 +296,10 @@ const useChat = () => {
       });
       setIsPartnerTyping(false);
 
-      if (roomIdRef.current === data.roomId) {
-        socket.emit('mark_messages_seen', {
-          roomId: data.roomId,
-          userId: localStorage.getItem('chat_user_id')
-        });
-      }
+      socket.emit('mark_messages_seen', {
+        roomId: data.roomId,
+        userId: localStorage.getItem('chat_user_id')
+      });
     });
 
     socket.on('exchange_keys', async (data) => {

@@ -34,6 +34,23 @@ async function joinAllFriendDmRooms(socket, friendIds, userId) {
     socket.join(privateDmRoomId(userId, fid));
   }
 }
+
+/** In-memory DM room row so send_message/mark_seen/participants checks work without opening the chat first. */
+function ensureFriendDmRoom(roomsMap, userIdA, userIdB) {
+  if (!userIdA || !userIdB || userIdA === userIdB) return null;
+  const rid = privateDmRoomId(userIdA, userIdB);
+  if (!roomsMap.has(rid)) {
+    roomsMap.set(rid, {
+      users: new Set([userIdA, userIdB]),
+      sockets: new Map()
+    });
+  } else {
+    const room = roomsMap.get(rid);
+    room.users.add(userIdA);
+    room.users.add(userIdB);
+  }
+  return rid;
+}
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcrypt");
 require("dotenv").config();
@@ -215,6 +232,9 @@ io.on("connection", (socket) => {
     const freshUser = await User.findOne({ userId });
     if (freshUser) {
       const friendIds = Array.isArray(freshUser.friends) ? freshUser.friends : [];
+      for (const fid of friendIds) {
+        ensureFriendDmRoom(rooms, userId, fid);
+      }
       await joinAllFriendDmRooms(socket, friendIds, userId);
       const friendUnreadCounts = await fetchFriendUnreadCounts(userId, friendIds);
 
@@ -311,7 +331,7 @@ io.on("connection", (socket) => {
       avatarColor: me.avatarColor
     });
 
-    const dmRoom = privateDmRoomId(socket.userId, fromUserId);
+    const dmRoom = ensureFriendDmRoom(rooms, socket.userId, fromUserId);
     socket.join(dmRoom);
     const peerEntry = onlineUsers.get(fromUserId);
     if (peerEntry) {
@@ -447,7 +467,21 @@ io.on("connection", (socket) => {
       }
 
       socket.join(roomId);
-      socket.to(roomId).emit("receive_message", data);
+
+      if (roomId.startsWith("private_")) {
+        const privUsers = rooms.get(roomId)?.users;
+        if (privUsers && privUsers.size > 0) {
+          for (const uid of privUsers) {
+            if (uid !== socket.userId) {
+              io.to(uid).emit("receive_message", data);
+            }
+          }
+        } else {
+          socket.to(roomId).emit("receive_message", data);
+        }
+      } else {
+        socket.to(roomId).emit("receive_message", data);
+      }
 
       if (roomId.startsWith("private_")) {
         try {
