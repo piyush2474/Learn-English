@@ -104,7 +104,7 @@ const Sidebar = ({ status, onNewChat, onEndSession, userCount, isOpen, onClose, 
                     </div>
                     {unread > 0 && (
                       <span
-                        className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#25D366] text-[10px] font-bold text-white leading-none shadow-sm border-2 border-[var(--color-sidebar-bg,#171717)] tabular-nums"
+                        className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[var(--color-primary)] text-[10px] font-bold text-white leading-none shadow-[0_2px_14px_rgb(99,102,241,0.7)] ring-2 ring-white/35 border border-[var(--color-primary-dark,#4f46e5)] tabular-nums"
                         aria-label={`${unread} unread messages`}
                       >
                         {formatUnreadBadge(unread)}
