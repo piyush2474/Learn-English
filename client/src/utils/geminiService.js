@@ -7,6 +7,11 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 export async function translateToEnglish(text) {
   if (!text || !text.trim()) return text;
 
+  if (!GEMINI_API_KEY) {
+    console.error("Master English Error: Gemini API Key is missing. Please add VITE_GEMINI_API_KEY to your .env or Vercel settings.");
+    return text;
+  }
+
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
