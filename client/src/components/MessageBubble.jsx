@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, X, Maximize2, Check, CheckCheck, Pencil, Reply } from 'lucide-react';
 import { hasRenderableReply, getReplySnippetDisplay } from '../utils/replyPreview';
+import { isGifDataUrl } from '../utils/imageCompressor';
 
 const SWIPE_THRESHOLD_PX = 52;
 const LONG_PRESS_MS = 600;
@@ -107,6 +108,7 @@ const MessageBubble = ({
   }, {});
 
   const actionsOpen = showMobileActions || showEmojiPicker;
+  const isGif = type === 'image' && typeof message === 'string' && isGifDataUrl(message);
 
   return (
     <div
@@ -259,7 +261,13 @@ const MessageBubble = ({
                 className="relative mt-1 w-44 h-14 rounded-xl overflow-hidden border border-white/10 shadow-inner group/img cursor-pointer flex items-center px-3 gap-3 bg-black/20 hover:bg-black/40 transition-all"
               >
                 <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative">
-                  <img src={message} alt="shared" className="w-full h-full object-cover blur-md scale-150" />
+                  <img
+                    src={message}
+                    alt={isGif ? 'GIF preview' : 'Photo preview'}
+                    className={`w-full h-full object-cover ${isGif ? '' : 'blur-md scale-150'}`}
+                    loading="lazy"
+                    decoding="async"
+                  />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     {isUploading ? (
                       <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
@@ -270,9 +278,11 @@ const MessageBubble = ({
                 </div>
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className="text-[13px] font-bold text-white/90 truncate uppercase tracking-wider">
-                    {isUploading ? 'Sending...' : 'Photo'}
+                    {isUploading ? 'Sending...' : isGif ? 'GIF' : 'Photo'}
                   </span>
-                  <span className="text-[10px] text-white/40 font-medium truncate">Tap to view</span>
+                  <span className="text-[10px] text-white/40 font-medium truncate">
+                    {isGif ? 'Animated' : 'Tap to view'}
+                  </span>
                 </div>
               </div>
             ) : (

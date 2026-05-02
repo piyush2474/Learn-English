@@ -15,6 +15,7 @@ import {
   exportSharedKey,
   importSharedKey
 } from '../utils/crypto';
+import { decryptedImageToDisplayUrl } from '../utils/imageCompressor';
 
 const useChat = () => {
   const {
@@ -261,19 +262,7 @@ const useChat = () => {
         rawContent = displayMessage;
       }
 
-      if (
-        data.type === 'image' &&
-        typeof displayMessage === 'string' &&
-        displayMessage.startsWith('data:')
-      ) {
-        try {
-          const res = await fetch(displayMessage);
-          const blob = await res.blob();
-          displayMessage = URL.createObjectURL(blob);
-        } catch (e) {
-          console.error('Blob conversion failed', e);
-        }
-      }
+      displayMessage = await decryptedImageToDisplayUrl(displayMessage, data.type);
 
       let replyToNorm = null;
       if (data.replyTo) {
@@ -350,6 +339,7 @@ const useChat = () => {
           history.map(async (msg) => {
             try {
               const decryptedMsg = await decryptToPlaintext(msg.message, key);
+              const displayMsg = await decryptedImageToDisplayUrl(decryptedMsg, msg.type);
 
               let replyData = null;
               if (msg.replyTo) {
@@ -358,7 +348,7 @@ const useChat = () => {
 
               return {
                 ...msg,
-                message: decryptedMsg,
+                message: displayMsg,
                 rawContent: msg.message,
                 messageId: msg.messageId || msg._id,
                 isEdited: msg.isEdited || false,
@@ -427,6 +417,7 @@ const useChat = () => {
         history.map(async (msg) => {
           try {
             const decryptedMsg = await decryptToPlaintext(msg.message, key);
+            const displayMsg = await decryptedImageToDisplayUrl(decryptedMsg, msg.type);
 
             let replyData = null;
             if (msg.replyTo) {
@@ -435,7 +426,7 @@ const useChat = () => {
 
             return {
               ...msg,
-              message: decryptedMsg,
+              message: displayMsg,
               rawContent: msg.message,
               messageId: msg.messageId || msg._id,
               isEdited: msg.isEdited || false,
@@ -641,7 +632,12 @@ const useChat = () => {
   };
 
   const sendMessage = async (text, type = 'text') => {
-    if (!text.trim() || !roomId) return;
+    if (!roomId) return;
+    if (type === 'image') {
+      if (typeof text !== 'string' || !text.startsWith('data:')) return;
+    } else if (!text || !String(text).trim()) {
+      return;
+    }
 
     const senderId = localStorage.getItem('chat_user_id');
     let replyPayload = null;

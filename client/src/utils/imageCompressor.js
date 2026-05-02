@@ -1,3 +1,41 @@
+/** Cap for animated GIFs (encrypted payload must stay under socket limits). */
+export const MAX_GIF_SIZE_BYTES = 4 * 1024 * 1024;
+
+export function isGifDataUrl(s) {
+  return typeof s === 'string' && /^data:image\/gif(;|base64,)/i.test(s);
+}
+
+export function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+/**
+ * After decrypt: blob URL for static images; keep data URL for GIF so frames animate in <img>.
+ */
+export async function decryptedImageToDisplayUrl(decrypted, messageType) {
+  if (
+    messageType !== 'image' ||
+    typeof decrypted !== 'string' ||
+    !decrypted.startsWith('data:')
+  ) {
+    return decrypted;
+  }
+  if (isGifDataUrl(decrypted)) return decrypted;
+  try {
+    const res = await fetch(decrypted);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch (e) {
+    console.error('Blob conversion failed', e);
+    return decrypted;
+  }
+}
+
 /**
  * Compresses an image file using Canvas API.
  * @param {File} file - The image file to compress.

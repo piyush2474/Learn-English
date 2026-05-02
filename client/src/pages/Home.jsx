@@ -21,7 +21,11 @@ import {
   exportKeyPair,
   importKeyPair,
 } from '../utils/crypto';
-import { compressImage } from '../utils/imageCompressor';
+import {
+  compressImage,
+  readFileAsDataURL,
+  MAX_GIF_SIZE_BYTES
+} from '../utils/imageCompressor';
 
 const Home = () => {
   // --- Zustand Store ---
@@ -368,17 +372,30 @@ const Home = () => {
       setInputText('');
     }
     try {
-      const compressed = await compressImage(file);
-      sendMessage(compressed, 'image');
+      if (file.type === 'image/gif') {
+        if (file.size > MAX_GIF_SIZE_BYTES) {
+          alert(
+            `GIF is too large (max ${MAX_GIF_SIZE_BYTES / (1024 * 1024)} MB). Try a shorter or smaller file.`
+          );
+          e.target.value = '';
+          return;
+        }
+        const dataUrl = await readFileAsDataURL(file);
+        sendMessage(dataUrl, 'image');
+      } else {
+        const compressed = await compressImage(file);
+        sendMessage(compressed, 'image');
+      }
     } catch (err) {
-      console.error("Compression failed", err);
-      // Fallback to original
-      const reader = new FileReader();
-      reader.onload = async () => {
-        sendMessage(reader.result, 'image');
-      };
-      reader.readAsDataURL(file);
+      console.error('Image upload failed', err);
+      try {
+        const fallback = await readFileAsDataURL(file);
+        sendMessage(fallback, 'image');
+      } catch (e2) {
+        console.error(e2);
+      }
     }
+    e.target.value = '';
   };
 
   const handleDownloadImage = (base64) => {

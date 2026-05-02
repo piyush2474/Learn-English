@@ -1,4 +1,5 @@
 import { decryptToPlaintext } from './crypto';
+import { isGifDataUrl } from './imageCompressor';
 
 export const REPLY_PREVIEW_MAX = 200;
 export const REPLY_UI_MAX = 100;
@@ -15,7 +16,7 @@ export function isBlobOrDataImage(s) {
 export function sanitizeReplyLine(text, max = REPLY_PREVIEW_MAX) {
   if (text == null || typeof text !== 'string') return '';
   if (isLikelyCiphertext(text)) return '';
-  if (isBlobOrDataImage(text)) return 'Photo';
+  if (isBlobOrDataImage(text)) return /^data:image\/gif/i.test(text) ? 'GIF' : 'Photo';
   const t = text
     .replace(/[\u0000-\u001F\u007F]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -35,7 +36,11 @@ export function buildReplyToPayload(replyingSnapshot) {
   const type = replyingSnapshot.type || 'text';
 
   if (type === 'image') {
-    return { messageId, senderId, type, preview: 'Photo', message: 'Photo' };
+    const label =
+      typeof replyingSnapshot.message === 'string' && isGifDataUrl(replyingSnapshot.message)
+        ? 'GIF'
+        : 'Photo';
+    return { messageId, senderId, type, preview: label, message: label };
   }
 
   let candidate = replyingSnapshot.message;
@@ -103,7 +108,11 @@ export async function normalizeReplyToFromServer(replyData, cryptoKey) {
 /** One-line snippet for composer / compact bars */
 export function getReplySnippetDisplay(replyTo, max = REPLY_UI_MAX) {
   if (!replyTo) return '';
-  if (replyTo.type === 'image') return 'Photo';
+  if (replyTo.type === 'image') {
+    const p = (replyTo.preview || replyTo.message || '').trim();
+    if (p === 'GIF') return 'GIF';
+    return 'Photo';
+  }
   const src = replyTo.preview || replyTo.message;
   return sanitizeReplyLine(src, max) || ENCRYPTED_FALLBACK;
 }

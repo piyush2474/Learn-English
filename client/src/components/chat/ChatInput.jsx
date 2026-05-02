@@ -91,7 +91,7 @@ const ChatInput = forwardRef(function ChatInput(
         type="file"
         ref={fileInputRef}
         onChange={handleImageUpload}
-        accept="image/*"
+        accept="image/*,.gif"
         className="hidden"
       />
       <form
@@ -106,7 +106,9 @@ const ChatInput = forwardRef(function ChatInput(
           type="button"
           onClick={() => fileInputRef.current.click()}
           disabled={isDisabled || isEditing}
-          title={isEditing ? 'Finish editing before sending a photo' : 'Attach image'}
+          title={
+            isEditing ? 'Finish editing before sending a photo' : 'Attach photo or GIF (GIF max 4 MB)'
+          }
           className="pl-4 pr-2 text-gray-400 hover:text-primary transition-colors disabled:opacity-30 disabled:pointer-events-none"
         >
           <Plus className="w-5 h-5" />
