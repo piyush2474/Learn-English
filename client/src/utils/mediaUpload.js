@@ -91,9 +91,15 @@ export async function uploadChatMedia(file, { roomId, messageId }, onProgress) {
       upsert: true,
       contentType: file.type || undefined,
       onUploadProgress: (evt) => {
-        if (onProgress && evt.total) {
-          const percent = Math.round((evt.loaded / evt.total) * 100);
-          onProgress(percent);
+        if (onProgress) {
+          // Fallback if lengthComputable is false or total is 0
+          if (evt.total && evt.total > 0) {
+            const percent = Math.round((evt.loaded / evt.total) * 100);
+            onProgress(Math.min(99, percent)); // Keep at 99 until finalized
+          } else {
+            // If we can't compute, just show that something is happening
+            onProgress(50);
+          }
         }
       }
     });

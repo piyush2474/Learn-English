@@ -24,6 +24,7 @@ const MessageBubble = ({
   onZoom,
   isUploading,
   uploadProgress,
+  uploadStatus,
   isEdited: initialIsEdited
 }) => {
   const [showMobileActions, setShowMobileActions] = useState(false);
@@ -352,7 +353,7 @@ const MessageBubble = ({
                   </span>
                   <span className="text-[10px] text-white/40 font-medium truncate">
                     {isUploading
-                      ? uploadProgress === 100 ? 'Finalizing…' : 'Uploading…'
+                      ? uploadStatus || (uploadProgress === 100 ? 'Finalizing…' : 'Uploading…')
                       : mediaStatus === false
                         ? 'Tap retry by reopening chat'
                         : isGif
@@ -409,7 +410,7 @@ const MessageBubble = ({
             <span className="text-[10px] font-medium">
               {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
-            {isSelf && (
+            {isSelf && !isUploading && (
               <span className="ml-1 flex items-center">
                 {status === 'failed' ? (
                   <span className="text-[9px] font-bold text-red-300 uppercase tracking-tight">Failed</span>

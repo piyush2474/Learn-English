@@ -451,7 +451,20 @@ const Home = () => {
       } catch (err) {
         console.warn('Supabase upload failed, falling back to direct socket send:', err);
         try {
-          const fallbackData = await readFileAsDataURL(file);
+          // Simulate progress for fallback so it doesn't look stuck at 0%
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.messageId === messageId ? { ...m, uploadProgress: 35, uploadStatus: 'Tunneling...' } : m
+            )
+          );
+          const fallbackData = await readFileAsDataURL(fileToUpload || file);
+          
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.messageId === messageId ? { ...m, uploadProgress: 75 } : m
+            )
+          );
+          
           if (localPreview) URL.revokeObjectURL(localPreview);
           sendMessage(fallbackData, isVideo ? 'video' : 'image', { replaceMessageId: messageId });
         } catch (fallbackErr) {

@@ -99,6 +99,7 @@ const ChatBox = ({
               onZoom={(url, mediaType) => onZoomImage(url, mediaType || msg.type)}
               isUploading={msg.isUploading}
               uploadProgress={msg.uploadProgress}
+              uploadStatus={msg.uploadStatus}
               isEdited={msg.isEdited}
             />
           ))}
