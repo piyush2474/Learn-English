@@ -98,8 +98,17 @@ const MessageBubble = ({
     return acc;
   }, {});
 
+  const actionsOpen = showMobileActions || showEmojiPicker;
+
   return (
-    <div className={`w-full px-4 py-2 flex ${isSelf ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+    <div
+      className={`
+        w-full px-4 py-2 flex ${isSelf ? 'justify-end' : 'justify-start'}
+        animate-in fade-in slide-in-from-bottom-2 duration-300
+        relative isolate
+        ${actionsOpen ? 'z-200' : 'z-0 hover:z-100'}
+      `}
+    >
       <div 
         className={`max-w-[85%] md:max-w-[70%] relative group ${isSelf ? 'items-end' : 'items-start'} flex flex-col`}
         onContextMenu={(e) => { e.preventDefault(); handleLongPress(); }}
@@ -142,11 +151,11 @@ const MessageBubble = ({
           }
           ${isEditing ? 'w-full min-w-[200px]' : ''}
         `}>
-          {/* Actions Menu */}
+          {/* Actions menu */}
           <div 
             ref={menuRef}
             className={`
-            absolute -bottom-12 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-30 transition-all duration-200
+            absolute -bottom-12 flex items-center gap-0.5 p-1 bg-[#1a1c2e]/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-300 transition-all duration-200
             ${showMobileActions || showEmojiPicker ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-[-10px] pointer-events-none md:group-hover:opacity-100 md:group-hover:scale-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto'}
             ${isSelf ? 'right-0' : 'left-0'}
             min-w-max
