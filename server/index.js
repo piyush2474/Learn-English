@@ -54,6 +54,7 @@ function ensureFriendDmRoom(roomsMap, userIdA, userIdB) {
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcrypt");
 require("dotenv").config();
+const { sendOfflineNotification } = require("./utils/notifications");
 
 // --- Email Configuration ---
 const transporter = nodemailer.createTransport({
@@ -270,6 +271,29 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("update_email", async (data) => {
+    const { email } = data;
+    if (socket.userId) {
+      await User.findOneAndUpdate({ userId: socket.userId }, { email });
+      socket.emit("email_updated", { email });
+    }
+  });
+
+  socket.on("subscribe_push", async (data) => {
+    const { subscription } = data;
+    if (socket.userId && subscription) {
+      // Add if not already exists based on endpoint
+      const user = await User.findOne({ userId: socket.userId });
+      if (user) {
+        const exists = user.pushSubscriptions.find(sub => sub.endpoint === subscription.endpoint);
+        if (!exists) {
+          user.pushSubscriptions.push(subscription);
+          await user.save();
+        }
+      }
+    }
+  });
+
   socket.on("send_friend_request", async (data) => {
     const { roomId } = data;
     if (!rooms.has(roomId)) return;
@@ -474,6 +498,15 @@ io.on("connection", (socket) => {
           for (const uid of privUsers) {
             if (uid !== socket.userId) {
               io.to(uid).emit("receive_message", data);
+              
+              // Trigger offline notification if the user is not online
+              if (!onlineUsers.has(uid)) {
+                // Fetch sender name for the notification
+                const sender = await User.findOne({ userId: socket.userId });
+                const senderName = sender ? (sender.name || "Stranger") : "Someone";
+                // Fire and forget
+                sendOfflineNotification(uid, senderName, message).catch(console.error);
+              }
             }
           }
         } else {

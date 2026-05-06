@@ -40,6 +40,19 @@ const userSchema = new mongoose.Schema({
   isVaultEnabled: {
     type: Boolean,
     default: false
+  },
+  email: {
+    type: String,
+    sparse: true,
+    default: null
+  },
+  pushSubscriptions: {
+    type: Array,
+    default: []
+  },
+  lastNotified: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

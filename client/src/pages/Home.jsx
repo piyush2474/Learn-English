@@ -89,6 +89,41 @@ const Home = () => {
   // --- Local Refs & UI State ---
   const [inputText, setInputText] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [pushStatus, setPushStatus] = useState('Enable Browser Notifications');
+
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  const handleSubscribePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert("Push notifications are not supported by this browser.");
+      return;
+    }
+    try {
+      setPushStatus('Requesting...');
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array("BCpOSJa5mc4zhW_M9NqCZ2mdSF1jfpQBcxm-8yKGwWBD-vwvCSRTTQyaB3lMGVOvTIlBDO-tMU_i6x2PHPFXXWY")
+      });
+      socket.emit('subscribe_push', { subscription });
+      setPushStatus('Subscribed!');
+    } catch (err) {
+      console.error(err);
+      setPushStatus('Failed');
+    }
+  };
   const [statusBarY, setStatusBarY] = useState(24);
   const [lightboxMedia, setLightboxMedia] = useState(null);
   const [showVaultGate, setShowVaultGate] = useState(null);
@@ -805,7 +840,7 @@ const Home = () => {
               <div className="space-y-6">
                 <div>
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2 block ml-1">Display Name</label>
-                  <div className="relative">
+                  <div className="relative mb-4">
                     <input 
                       type="text" 
                       value={nameInput} 
@@ -814,6 +849,17 @@ const Home = () => {
                       placeholder="How should we call you?..." 
                     />
                     <Shield className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                  </div>
+                  
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2 block ml-1">Recovery & Notifications Email</label>
+                  <div className="relative">
+                    <input 
+                      type="email" 
+                      value={emailInput} 
+                      onChange={(e) => setEmailInput(e.target.value)} 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-blue-500/50 transition-all font-medium" 
+                      placeholder="Email for offline alerts..." 
+                    />
                   </div>
                 </div>
 
@@ -836,8 +882,16 @@ const Home = () => {
                 </div>
 
                 <button 
+                  onClick={handleSubscribePush}
+                  className="w-full bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/40 text-indigo-400 py-3 rounded-2xl font-bold text-xs transition-all"
+                >
+                  {pushStatus}
+                </button>
+
+                <button 
                   onClick={() => { 
                     socket.emit('update_profile', { name: nameInput }); 
+                    if (emailInput.trim()) socket.emit('update_email', { email: emailInput.trim() });
                     setIsSettingsOpen(false); 
                   }} 
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20 active:scale-95 mt-4"
