@@ -133,6 +133,26 @@ const Home = () => {
       setPushStatus('Failed');
     }
   };
+
+  useEffect(() => {
+    const checkSubscription = async () => {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+          if (registration) {
+            const subscription = await registration.pushManager.getSubscription();
+            if (subscription) {
+              setPushStatus('Subscribed!');
+            }
+          }
+        } catch (err) {
+          console.error('Error checking push subscription:', err);
+        }
+      }
+    };
+    checkSubscription();
+  }, []);
+
   const [statusBarY, setStatusBarY] = useState(24);
   const [lightboxMedia, setLightboxMedia] = useState(null);
   const [showVaultGate, setShowVaultGate] = useState(null);
