@@ -49,6 +49,7 @@ const Home = () => {
     friendRequests, setFriendRequests,
     myUserId, setMyUserId,
     myName, setMyName,
+    myEmail,
     sharedKey,
     isPartnerTyping,
     isSettingsOpen, setIsSettingsOpen,
@@ -111,8 +112,16 @@ const Home = () => {
       return;
     }
     try {
-      setPushStatus('Requesting...');
+      setPushStatus('Requesting Permission...');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushStatus('Permission Denied');
+        return;
+      }
+      setPushStatus('Registering...');
       const registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      setPushStatus('Subscribing...');
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array("BCpOSJa5mc4zhW_M9NqCZ2mdSF1jfpQBcxm-8yKGwWBD-vwvCSRTTQyaB3lMGVOvTIlBDO-tMU_i6x2PHPFXXWY")
@@ -261,8 +270,9 @@ const Home = () => {
   useEffect(() => {
     if (isSettingsOpen) {
       setNameInput(myName);
+      setEmailInput(myEmail || '');
     }
-  }, [isSettingsOpen, myName]);
+  }, [isSettingsOpen, myName, myEmail]);
 
   const handleToggleVault = () => {
     if (isVaultEnabled) {
@@ -891,7 +901,9 @@ const Home = () => {
                 <button 
                   onClick={() => { 
                     socket.emit('update_profile', { name: nameInput }); 
-                    if (emailInput.trim()) socket.emit('update_email', { email: emailInput.trim() });
+                    if (emailInput.trim() !== (myEmail || '')) {
+                      socket.emit('update_email', { email: emailInput.trim() });
+                    }
                     setIsSettingsOpen(false); 
                   }} 
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20 active:scale-95 mt-4"

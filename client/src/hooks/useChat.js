@@ -530,6 +530,7 @@ const useChat = () => {
 
     socket.on('init_data', (data) => {
       if (data.name) setMyName(data.name);
+      if (data.email !== undefined) useStore.getState().setMyEmail(data.email);
       if (Array.isArray(data.friends)) {
         setFriends(data.friends);
       }
@@ -581,6 +582,10 @@ const useChat = () => {
       }
     });
 
+    socket.on('email_updated', (data) => {
+      useStore.getState().setMyEmail(data.email);
+    });
+
     socket.on('chat_cleared', (data) => {
       if (data.roomId === roomIdRef.current) {
         setMessages([]);
@@ -623,6 +628,7 @@ const useChat = () => {
       socket.off('partner_rejoined');
       socket.off('messages_marked_seen');
       socket.off('chat_cleared');
+      socket.off('email_updated');
       socket.off('friend_status_update');
       socket.off('init_data');
       socket.off('friend_request_received');

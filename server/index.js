@@ -255,6 +255,7 @@ io.on("connection", (socket) => {
 
       socket.emit("init_data", { 
         name: freshUser.name || "Stranger",
+        email: freshUser.email || "",
         friends: friendsData,
         pendingRequests: freshUser.pendingRequests || [],
         isVaultEnabled: freshUser.isVaultEnabled || false,

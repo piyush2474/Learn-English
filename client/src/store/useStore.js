@@ -12,6 +12,7 @@ const useStore = create((set) => ({
   // User Profile
   myUserId: null,
   myName: 'Stranger',
+  myEmail: '',
   
   // Chat Data
   messages: [],
@@ -46,6 +47,7 @@ const useStore = create((set) => ({
   
   setMyUserId: (id) => set({ myUserId: id }),
   setMyName: (name) => set({ myName: name }),
+  setMyEmail: (email) => set({ myEmail: email }),
   
   setMessages: (messages) => set((state) => ({ 
     messages: typeof messages === 'function' ? messages(state.messages) : messages 
